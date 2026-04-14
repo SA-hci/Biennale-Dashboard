@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Installation Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root {
+    --bg:#0e0e0e; --surface:#161616; --surface2:#1e1e1e; --surface3:#282828;
+    --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.15);
+    --text:#f0ede8; --muted:#888; --dimmed:#505050;
+    --green:#4ade80; --green-dim:rgba(74,222,128,0.10);
+    --amber:#fbbf24; --amber-dim:rgba(251,191,36,0.10);
+    --red:#f87171; --red-dim:rgba(248,113,113,0.10);
+    --blue:#60a5fa; --blue-dim:rgba(96,165,250,0.10);
+    --accent:#c8b8f8; --accent-dim:rgba(200,184,248,0.10); --accent2:rgba(200,184,248,0.18);
+    --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
+  }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-weight:300; min-height:100vh; padding:2rem 1.5rem 4rem; max-width:1080px; margin:0 auto; }
+
+  header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.75rem; padding-bottom:1.5rem; border-bottom:0.5px solid var(--border); gap:2rem; flex-wrap:wrap; }
+  .header-left h1 { font-family:var(--mono); font-size:12px; font-weight:400; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin-bottom:5px; }
+  .header-left p  { font-size:11px; color:var(--dimmed); font-family:var(--mono); }
+  .broker-config { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .broker-config input { background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 10px; width:295px; outline:none; }
+  .broker-config input:focus { border-color:var(--accent); }
+  .broker-config input::placeholder { color:var(--dimmed); }
+  .broker-row { display:flex; gap:6px; align-items:center; }
+  .connect-btn { background:var(--accent-dim); border:0.5px solid var(--accent); border-radius:6px; color:var(--accent); font-family:var(--mono); font-size:11px; padding:6px 16px; cursor:pointer; white-space:nowrap; transition:background 0.15s; }
+  .connect-btn:hover { background:var(--accent2); }
+  .conn-status { font-family:var(--mono); font-size:10px; display:flex; align-items:center; gap:5px; white-space:nowrap; }
+  .conn-dot { width:6px; height:6px; border-radius:50%; background:var(--dimmed); flex-shrink:0; }
+  .conn-dot.connecting { background:var(--amber); animation:blink 1s infinite; }
+  .conn-dot.connected  { background:var(--green); }
+  .conn-dot.error      { background:var(--red); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+  .master-bar { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+  .master-label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); }
+  .master-on-btn  { font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.08em; padding:7px 20px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--green-dim); border:0.5px solid var(--green); color:var(--green); }
+  .master-on-btn:hover { background:rgba(74,222,128,0.2); }
+  .master-on-btn.inactive { background:var(--surface2); border-color:var(--border2); color:var(--dimmed); }
+  .master-off-btn { font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.08em; padding:7px 20px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--dimmed); }
+  .master-off-btn:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
+  .master-off-btn.active { background:var(--red-dim); border-color:var(--red); color:var(--red); }
+  .master-status { font-family:var(--mono); font-size:11px; margin-left:8px; }
+  .master-status.on  { color:var(--green); }
+  .master-status.off { color:var(--red); }
+
+  .panel { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; }
+  .panel-title { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); margin-bottom:0.85rem; }
+  .panel-row { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+  .panel-row + .panel-row { margin-top:0.65rem; }
+  .panel-row-label { font-family:var(--mono); font-size:10px; color:var(--muted); min-width:90px; flex-shrink:0; }
+  input[type="time"] { background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 10px; width:112px; outline:none; color-scheme:dark; }
+  input[type="time"]:focus { border-color:var(--accent); }
+  input[type="date"] { background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 10px; outline:none; color-scheme:dark; width:150px; }
+  input[type="date"]:focus { border-color:var(--accent); }
+  .sep { font-family:var(--mono); font-size:11px; color:var(--dimmed); }
+  .num-input { width:64px; background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; text-align:center; }
+  .num-input:focus { border-color:var(--accent); }
+  .btn-set { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; padding:5px 14px; border-radius:6px; cursor:pointer; background:var(--accent-dim); border:0.5px solid var(--accent); color:var(--accent); transition:background 0.12s; white-space:nowrap; }
+  .btn-set:hover { background:var(--accent2); }
+  .toggle-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:5px 14px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .toggle-btn:hover { background:var(--surface3); color:var(--text); }
+  .toggle-btn.on { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .status-text { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .status-text.active { color:var(--green); }
+  .confirm-flash { font-family:var(--mono); font-size:10px; }
+  .blackout-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; min-height:24px; }
+  .blackout-tag { display:flex; align-items:center; gap:5px; background:var(--amber-dim); border:0.5px solid rgba(251,191,36,0.3); border-radius:5px; padding:3px 8px 3px 10px; font-family:var(--mono); font-size:10px; color:var(--amber); }
+  .blackout-tag button { background:none; border:none; color:var(--amber); cursor:pointer; font-size:13px; line-height:1; padding:0; opacity:0.6; }
+  .blackout-tag button:hover { opacity:1; }
+  .blackout-tags-empty { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+
+  .monitor-all-bar { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:0.85rem 1.25rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; }
+  .monitor-all-label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); flex-shrink:0; }
+  .btn-action { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.07em; padding:6px 14px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .btn-action:hover { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .btn-action.stop:hover   { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
+  .btn-action.danger:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
+
+  /* ── Control panel (motion + thermal) ── */
+  .control-panel { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; }
+  .control-panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem; }
+  .control-panel-title  { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); }
+  .unit-tabs { display:flex; gap:4px; }
+  .unit-tab { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:4px 12px; border-radius:5px; cursor:pointer; transition:all 0.12s; background:var(--surface2); border:0.5px solid var(--border2); color:var(--dimmed); }
+  .unit-tab:hover { color:var(--muted); }
+  .unit-tab.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+
+  .control-section-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); margin-bottom:0.75rem; padding-bottom:6px; border-bottom:0.5px solid var(--border); }
+  .control-section-label + .control-section-label, .control-actions + .control-section-label { margin-top:1rem; }
+
+  .params-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
+  .param-row { display:flex; flex-direction:column; gap:6px; }
+  .param-header { display:flex; justify-content:space-between; align-items:center; }
+  .param-label { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .param-value { font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:500; }
+  .param-board { font-family:var(--mono); font-size:9px; color:var(--dimmed); }
+
+  input[type="range"] { -webkit-appearance:none; appearance:none; width:100%; height:3px; background:var(--surface3); border-radius:2px; outline:none; cursor:pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 2px rgba(200,184,248,0.2); }
+  input[type="range"]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--accent); cursor:pointer; border:none; }
+  input[type="range"].thermal::-webkit-slider-thumb { background:var(--red); box-shadow:0 0 0 2px rgba(248,113,113,0.2); }
+  input[type="range"].thermal::-moz-range-thumb { background:var(--red); }
+  input[type="range"].thermal { background:rgba(248,113,113,0.15); }
+
+  .control-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:0; }
+  .btn-save { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:6px 18px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .btn-save.motion  { background:var(--green-dim); border:0.5px solid var(--green); color:var(--green); }
+  .btn-save.motion:hover  { background:rgba(74,222,128,0.2); }
+  .btn-save.thermal { background:var(--red-dim); border:0.5px solid var(--red); color:var(--red); }
+  .btn-save.thermal:hover { background:rgba(248,113,113,0.2); }
+  .save-flash { font-family:var(--mono); font-size:10px; }
+  .save-flash.motion  { color:var(--green); }
+  .save-flash.thermal { color:var(--red); }
+
+  /* ── Units grid ── */
+  .units-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; }
+  .unit-card { background:var(--surface); border:0.5px solid var(--border); border-radius:14px; padding:1.25rem; transition:border-color 0.4s; }
+  .unit-card.online            { border-color:rgba(74,222,128,0.22); }
+  .unit-card.stale             { border-color:rgba(251,191,36,0.22); }
+  .unit-card.offline           { border-color:rgba(248,113,113,0.18); }
+  .unit-card.monitoring-active { border-color:rgba(200,184,248,0.4); }
+  .unit-card.thermal-shutdown  { border-color:rgba(248,113,113,0.6) !important; animation:thermal-pulse 2s infinite; }
+  @keyframes thermal-pulse { 0%,100%{border-color:rgba(248,113,113,0.6)} 50%{border-color:rgba(248,113,113,0.2)} }
+
+  .card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1rem; }
+  .unit-id-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dimmed); margin-bottom:3px; }
+  .unit-id-num   { font-family:var(--mono); font-size:22px; font-weight:500; color:var(--text); line-height:1; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pill { font-family:var(--mono); font-size:10px; letter-spacing:0.07em; padding:3px 10px; border-radius:20px; text-transform:uppercase; }
+  .pill.online  { background:var(--green-dim);  color:var(--green); }
+  .pill.stale   { background:var(--amber-dim);  color:var(--amber); }
+  .pill.offline { background:var(--red-dim);    color:var(--red); }
+  .pill.waiting { background:rgba(255,255,255,0.05); color:var(--dimmed); }
+  .pill.live    { background:var(--accent-dim); color:var(--accent); }
+  .badge { font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; padding:2px 7px; border-radius:4px; }
+  .badge.paused       { color:var(--amber); background:var(--amber-dim); }
+  .badge.detached     { color:var(--blue);  background:var(--blue-dim); }
+  .badge.ntp-ok       { color:var(--green); background:var(--green-dim); }
+  .badge.ntp-fail     { color:var(--dimmed); background:rgba(255,255,255,0.05); }
+  .badge.blackout-on  { color:var(--amber); background:var(--amber-dim); }
+  .badge.master-off   { color:var(--red);   background:var(--red-dim); }
+  .badge.thermal-sd   { color:var(--red);   background:var(--red-dim); animation:blink 1s infinite; }
+
+  .monitor-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.85rem; }
+  .monitor-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.07em; padding:5px 14px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .monitor-btn:hover  { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .monitor-btn.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .monitor-countdown  { font-family:var(--mono); font-size:10px; color:var(--accent); min-height:14px; }
+
+  .pos-row { display:flex; align-items:center; gap:14px; margin-bottom:1rem; }
+  .servo-angle-big { font-family:var(--mono); font-size:36px; font-weight:500; line-height:1; color:var(--text); transition:opacity 0.3s; }
+  .servo-deg-sm    { font-family:var(--mono); font-size:14px; color:var(--muted); }
+  .servo-sub       { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:4px; }
+
+  .range-wrap   { margin-bottom:1rem; }
+  .range-labels { display:flex; justify-content:space-between; margin-bottom:5px; }
+  .range-lbl    { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .range-lbl span { color:var(--muted); }
+  .range-track { height:4px; background:var(--surface3); border-radius:2px; position:relative; }
+  .range-fill  { position:absolute; height:100%; background:var(--accent); opacity:0.3; border-radius:2px; transition:left 0.3s, width 0.3s; }
+  .range-thumb { position:absolute; width:9px; height:9px; border-radius:50%; background:var(--accent); top:-2.5px; transform:translateX(-50%); transition:left 0.4s; box-shadow:0 0 0 2px rgba(200,184,248,0.2); }
+
+  .motion-params-row { background:var(--surface2); border-radius:8px; padding:9px 12px; margin-bottom:1rem; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+  .mp-item-lbl { font-family:var(--mono); font-size:9px; color:var(--dimmed); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px; }
+
+  .sensor-bars { display:flex; flex-direction:column; gap:8px; margin-bottom:1rem; }
+  .sensor-row { display:flex; flex-direction:column; gap:4px; }
+  .sensor-header { display:flex; justify-content:space-between; align-items:center; }
+  .sensor-label { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .sensor-value { font-family:var(--mono); font-size:11px; font-weight:500; }
+  .sensor-value.good  { color:var(--green); }
+  .sensor-value.warn  { color:var(--amber); }
+  .sensor-value.bad   { color:var(--red); }
+  .sensor-value.muted { color:var(--dimmed); }
+  .sensor-track { height:3px; background:var(--surface3); border-radius:2px; overflow:hidden; }
+  .sensor-fill  { height:100%; border-radius:2px; transition:width 0.5s, background 0.5s; }
+
+  .metrics-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:1rem; }
+  .metric      { background:var(--surface2); border-radius:8px; padding:9px 12px; }
+  .metric-lbl  { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:var(--dimmed); margin-bottom:4px; }
+  .metric-val  { font-family:var(--mono); font-size:13px; color:var(--text); }
+  .metric-val.good  { color:var(--green); }
+  .metric-val.warn  { color:var(--amber); }
+  .metric-val.bad   { color:var(--red); }
+  .metric-val.muted { color:var(--dimmed); }
+
+  .board-sched-row { display:flex; align-items:center; gap:8px; background:var(--surface2); border-radius:8px; padding:8px 12px; margin-bottom:1rem; font-family:var(--mono); font-size:10px; color:var(--dimmed); flex-wrap:wrap; }
+  .board-sched-row span { color:var(--muted); }
+  .board-sched-row .val { color:var(--accent); }
+
+  .divider { height:0.5px; background:var(--border); margin:0.9rem 0; }
+  .ctrl-group-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); margin-bottom:7px; }
+  .ctrl-row { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:0.75rem; }
+  .btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; padding:6px 11px; border-radius:6px; cursor:pointer; transition:all 0.12s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .btn:hover { background:var(--surface3); color:var(--text); }
+  .btn:active { transform:scale(0.97); }
+  .btn.b-pause:hover  { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
+  .btn.b-resume:hover { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .btn.b-goto:hover   { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .btn.b-adj:hover    { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .btn.b-detach:hover { background:var(--blue-dim); border-color:var(--blue); color:var(--blue); }
+  .btn.b-attach:hover { background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .set-limit-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .limit-wrap    { display:flex; align-items:center; gap:5px; }
+  .limit-wrap label { font-family:var(--mono); font-size:10px; color:var(--dimmed); text-transform:uppercase; letter-spacing:0.06em; }
+  .last-seen { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:10px; text-align:right; }
+
+  .log-section  { margin-top:2.5rem; border-top:0.5px solid var(--border); padding-top:1.5rem; }
+  .log-title    { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); margin-bottom:0.75rem; }
+  .log-entries  { display:flex; flex-direction:column; gap:3px; max-height:130px; overflow-y:auto; }
+  .log-entry    { font-family:var(--mono); font-size:11px; display:flex; gap:10px; }
+  .log-time     { color:var(--dimmed); flex-shrink:0; }
+  .log-msg.ok   { color:var(--green); }
+  .log-msg.warn { color:var(--amber); }
+  .log-msg.err  { color:var(--red); }
+  .log-msg.info { color:var(--muted); }
+
+  /* ── Health log ── */
+  .health-section { margin-top:2.5rem; border-top:0.5px solid var(--border); padding-top:1.5rem; }
+  .health-header  { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:0.75rem; }
+  .health-title   { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); }
+  .health-meta    { font-family:var(--mono); font-size:10px; color:var(--dimmed); display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+  .health-meta .dot { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; margin-right:4px; }
+  .health-meta .dot.idle { background:var(--dimmed); }
+  .health-next    { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .btn-health     { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.07em; padding:4px 12px; border-radius:5px; cursor:pointer; transition:all 0.12s; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .btn-health:hover { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .btn-health.danger:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
+
+  .health-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:1rem; }
+  .health-card { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; }
+  .health-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.85rem; }
+  .health-card-title  { font-family:var(--mono); font-size:11px; color:var(--text); }
+  .health-card-date   { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+
+  .health-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:0.85rem; }
+  .health-stat  { background:var(--surface2); border-radius:6px; padding:7px 10px; }
+  .health-stat-lbl { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:var(--dimmed); margin-bottom:3px; }
+  .health-stat-val { font-family:var(--mono); font-size:13px; }
+  .health-stat-val.good { color:var(--green); }
+  .health-stat-val.warn { color:var(--amber); }
+  .health-stat-val.bad  { color:var(--red); }
+  .health-stat-val.muted{ color:var(--dimmed); }
+
+  .health-chart { position:relative; height:60px; background:var(--surface2); border-radius:6px; overflow:hidden; }
+  .health-chart-line { position:absolute; bottom:0; left:0; width:100%; height:100%; }
+  .health-chart-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .health-chart-label { position:absolute; bottom:4px; right:6px; font-family:var(--mono); font-size:9px; color:var(--dimmed); }
+
+  .health-yesterday { margin-top:6px; font-family:var(--mono); font-size:10px; color:var(--dimmed); padding:6px 10px; background:var(--surface2); border-radius:6px; }
+  .health-yesterday span { color:var(--muted); margin-right:4px; }
+  .health-count { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:5px; text-align:right; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Installation Monitor</h1>
+    <p id="clock">—</p>
+  </div>
+  <div class="broker-config">
+    <input id="inp-url"  type="text"     placeholder="wss://your-host.hivemq.cloud:8884/mqtt" />
+    <input id="inp-user" type="text"     placeholder="username" />
+    <input id="inp-pass" type="password" placeholder="password" />
+    <div class="broker-row">
+      <button class="connect-btn" onclick="toggleConnect()">Connect</button>
+      <span class="conn-status">
+        <span class="conn-dot" id="conn-dot"></span>
+        <span id="conn-label" style="color:var(--dimmed)">disconnected</span>
+      </span>
+    </div>
+  </div>
+</header>
+
+<div class="master-bar">
+  <div class="master-label">Master</div>
+  <button class="master-on-btn"  id="master-on-btn"  onclick="masterOn()">On</button>
+  <button class="master-off-btn" id="master-off-btn" onclick="masterOff()">Off</button>
+  <span class="master-status" id="master-status">—</span>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button class="btn-action" onclick="rebootAll()">Reboot all</button>
+    <button class="btn-action danger" onclick="resetWifiAll()">Reset Wi-Fi (all)</button>
+  </div>
+</div>
+
+<div class="monitor-all-bar">
+  <div class="monitor-all-label">Monitor</div>
+  <button class="btn-action" onclick="monitorAll()">All units on</button>
+  <button class="btn-action stop" onclick="stopAll()">All units off</button>
+</div>
+
+<!-- Combined motion + thermal control panel -->
+<div class="control-panel">
+  <div class="control-panel-header">
+    <div class="control-panel-title">Motion &amp; thermal control</div>
+    <div class="unit-tabs">
+      <button class="unit-tab active" id="ctab-1" onclick="selectControlUnit(1)">Unit 1</button>
+      <button class="unit-tab"        id="ctab-2" onclick="selectControlUnit(2)">Unit 2</button>
+      <button class="unit-tab"        id="ctab-3" onclick="selectControlUnit(3)">Unit 3</button>
+    </div>
+  </div>
+
+  <div class="control-section-label">Motion parameters</div>
+  <div class="params-grid">
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Speed <span style="color:var(--dimmed);font-size:9px">(slow ← → fast)</span></div>
+        <div><span class="param-value" id="speed-display">35 ms</span><span class="param-board" id="speed-board"> · board: —</span></div>
+      </div>
+      <input type="range" id="speed-slider" min="10" max="80" value="35" oninput="onParamSlider('speed')" onchange="sendParamLive('speed')" />
+    </div>
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Hesitation <span style="color:var(--dimmed);font-size:9px">(rare ← → frequent)</span></div>
+        <div><span class="param-value" id="hesit-display">15</span><span class="param-board" id="hesit-board"> · board: —</span></div>
+      </div>
+      <input type="range" id="hesit-slider" min="0" max="100" value="15" oninput="onParamSlider('hesit')" onchange="sendParamLive('hesit')" />
+    </div>
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Pause between sweeps <span style="color:var(--dimmed);font-size:9px">(s)</span></div>
+        <div><span class="param-value" id="pause-display">9 s</span><span class="param-board" id="pause-board"> · board: —</span></div>
+      </div>
+      <input type="range" id="pause-slider" min="1" max="30" value="9" oninput="onParamSlider('pause')" onchange="sendParamLive('pause')" />
+    </div>
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Step size <span style="color:var(--dimmed);font-size:9px">(smooth ← → coarse)</span></div>
+        <div><span class="param-value" id="step-display">0.6°</span><span class="param-board" id="step-board"> · board: —</span></div>
+      </div>
+      <input type="range" id="step-slider" min="2" max="20" value="6" oninput="onParamSlider('step')" onchange="sendParamLive('step')" />
+    </div>
+  </div>
+  <div class="control-actions">
+    <button class="btn-save motion" onclick="saveMotion()">Save motion to flash</button>
+    <span class="save-flash motion" id="motion-saved"></span>
+    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Changes apply instantly · Save persists through reboots</span>
+  </div>
+
+  <div class="control-section-label">Thermal protection</div>
+  <div class="params-grid">
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Shutdown above <span style="color:var(--dimmed);font-size:9px">(°C)</span></div>
+        <div><span class="param-value" id="cutoff-display" style="color:var(--red)">65°C</span><span class="param-board" id="cutoff-board"> · board: —</span></div>
+      </div>
+      <input type="range" class="thermal" id="cutoff-slider" min="40" max="80" value="65" oninput="onParamSlider('cutoff')" onchange="sendParamLive('cutoff')" />
+    </div>
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Resume below <span style="color:var(--dimmed);font-size:9px">(°C)</span></div>
+        <div><span class="param-value" id="resume-display" style="color:var(--amber)">55°C</span><span class="param-board" id="resume-board"> · board: —</span></div>
+      </div>
+      <input type="range" class="thermal" id="resume-slider" min="30" max="75" value="55" oninput="onParamSlider('resume')" onchange="sendParamLive('resume')" />
+    </div>
+  </div>
+  <div class="control-actions">
+    <button class="btn-save thermal" onclick="saveThermal()">Save thermal to flash</button>
+    <span class="save-flash thermal" id="thermal-saved"></span>
+    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Cutoff must be ≥ Resume + 5°C</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">Board schedule — persistent, survives power off</div>
+  <div class="panel-row">
+    <div class="panel-row-label">On / Off times</div>
+    <input type="time" id="new-sched-on"  value="09:00" />
+    <span class="sep">→</span>
+    <input type="time" id="new-sched-off" value="18:00" />
+    <button class="btn-set" onclick="sendScheduleToAll()">Send to all units</button>
+    <span class="confirm-flash" id="sched-confirm"></span>
+  </div>
+  <div class="panel-row">
+    <div class="panel-row-label">Blackout dates</div>
+    <input type="date" id="blackout-date" />
+    <button class="btn-set" onclick="addBlackoutToAll()">Add to all units</button>
+    <span class="confirm-flash" id="blackout-confirm"></span>
+  </div>
+  <div class="blackout-tags" id="blackout-tags-display">
+    <span class="blackout-tags-empty">no blackout dates set</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">Dashboard override — re-asserts on reconnect</div>
+  <div class="panel-row">
+    <div class="panel-row-label">Override times</div>
+    <input type="time" id="sched-on"  value="09:00" />
+    <span class="sep">→</span>
+    <input type="time" id="sched-off" value="18:00" />
+    <button class="toggle-btn" id="sched-btn" onclick="toggleSchedule()">Enable</button>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <div class="status-text" id="sched-status">override off</div>
+      <div class="status-text" id="sched-next"></div>
+    </div>
+  </div>
+</div>
+
+<div class="units-grid" id="units-grid"></div>
+
+<div class="log-section">
+  <div class="log-title">Event log</div>
+  <div class="log-entries" id="log"></div>
+</div>
+
+<div class="health-section">
+  <div class="health-header">
+    <div class="health-title">Temperature health log</div>
+    <div class="health-meta">
+      <span><span class="dot idle" id="health-dot"></span><span id="health-status">idle</span></span>
+      <span class="health-next" id="health-next">—</span>
+      <button class="btn-health" onclick="runHealthCheck()">Check now</button>
+      <button class="btn-health danger" onclick="clearHealthLog()">Clear log</button>
+    </div>
+  </div>
+  <div class="health-grid" id="health-grid"></div>
+</div>
+
+<script>
+const UNIT_COUNT = 3;
+const MONITOR_MS = 120000;
+const HEAP_WARN = 60000; const HEAP_BAD = 30000; const HEAP_MAX = 200000;
+
+let client = null, schedActive = false, schedInterval = null, lastSchedState = null, masterState = null;
+let controlUnit = 1;
+const dashboardBlackouts = new Set();
+const monitorCountdowns  = {};
+
+const units = {};
+for (let i = 1; i <= UNIT_COUNT; i++) {
+  units[i] = {
+    angle:null,uptime:null,paused:false,detached:false,rssi:null,
+    minLimit:null,maxLimit:null,ntpSynced:null,boardTime:null,
+    schedOn:null,schedOff:null,blackouts:[],monitoring:false,master:null,
+    cpuTemp:null,freeHeap:null,lastSeen:null,
+    mSpeed:null,mHesit:null,mPause:null,mStep:null,
+    tCutoff:null,tResume:null,thermalSd:false
+  };
+}
+
+// ── Control panel ─────────────────────────────────────────────────────────────
+function selectControlUnit(id) {
+  controlUnit = id;
+  for (let i = 1; i <= UNIT_COUNT; i++) document.getElementById(`ctab-${i}`).classList.toggle('active', i===id);
+  syncControlSliders(id);
+}
+
+function syncControlSliders(id) {
+  const u = units[id];
+  if (u.mSpeed  != null) { document.getElementById('speed-slider').value  = u.mSpeed; document.getElementById('hesit-slider').value  = u.mHesit; document.getElementById('pause-slider').value  = u.mPause; document.getElementById('step-slider').value   = u.mStep; }
+  if (u.tCutoff != null) { document.getElementById('cutoff-slider').value = u.tCutoff; document.getElementById('resume-slider').value = u.tResume; }
+  updateAllDisplays();
+  updateBoardValues(id);
+}
+
+function updateAllDisplays() {
+  const speed  = parseInt(document.getElementById('speed-slider').value);
+  const hesit  = parseInt(document.getElementById('hesit-slider').value);
+  const pause  = parseInt(document.getElementById('pause-slider').value);
+  const step   = parseInt(document.getElementById('step-slider').value);
+  const cutoff = parseInt(document.getElementById('cutoff-slider').value);
+  const resume = parseInt(document.getElementById('resume-slider').value);
+  document.getElementById('speed-display').textContent  = speed + ' ms';
+  document.getElementById('hesit-display').textContent  = hesit;
+  document.getElementById('pause-display').textContent  = pause + ' s';
+  document.getElementById('step-display').textContent   = (step/10).toFixed(1) + '°';
+  document.getElementById('cutoff-display').textContent = cutoff + '°C';
+  document.getElementById('resume-display').textContent = resume + '°C';
+}
+
+function updateBoardValues(id) {
+  const u = units[id];
+  document.getElementById('speed-board').textContent  = u.mSpeed  != null ? ` · board: ${u.mSpeed}ms`            : ' · board: —';
+  document.getElementById('hesit-board').textContent  = u.mHesit  != null ? ` · board: ${u.mHesit}`              : ' · board: —';
+  document.getElementById('pause-board').textContent  = u.mPause  != null ? ` · board: ${u.mPause}s`             : ' · board: —';
+  document.getElementById('step-board').textContent   = u.mStep   != null ? ` · board: ${(u.mStep/10).toFixed(1)}°` : ' · board: —';
+  document.getElementById('cutoff-board').textContent = u.tCutoff != null ? ` · board: ${u.tCutoff}°C`           : ' · board: —';
+  document.getElementById('resume-board').textContent = u.tResume != null ? ` · board: ${u.tResume}°C`           : ' · board: —';
+}
+
+function onParamSlider(param) { updateAllDisplays(); }
+
+function sendParamLive(param) {
+  const val = document.getElementById(`${param}-slider`).value;
+  const map = { speed:'set_speed', hesit:'set_hesitation', pause:'set_pause', step:'set_step', cutoff:'set_temp_cutoff', resume:'set_temp_resume' };
+  sendCmd(controlUnit, `${map[param]}:${val}`);
+}
+
+function saveMotion() {
+  sendCmd(controlUnit, 'save_motion');
+  const el = document.getElementById('motion-saved');
+  el.textContent = `saved to unit ${controlUnit}`;
+  setTimeout(() => el.textContent = '', 3000);
+  addLog(`motion saved to unit ${controlUnit}`, 'ok');
+}
+
+function saveThermal() {
+  sendCmd(controlUnit, 'save_thermal');
+  const el = document.getElementById('thermal-saved');
+  el.textContent = `saved to unit ${controlUnit}`;
+  setTimeout(() => el.textContent = '', 3000);
+  addLog(`thermal saved to unit ${controlUnit}`, 'ok');
+}
+
+// ── Master switch ─────────────────────────────────────────────────────────────
+function masterOn()  { sendCmdAll('master_on');  masterState=true;  updateMasterUI(); addLog('master ON → all units','ok'); }
+function masterOff() {
+  if (!confirm('Turn off all units? Servos will detach and stay off until Master On is pressed.')) return;
+  sendCmdAll('master_off'); masterState=false; updateMasterUI(); addLog('master OFF → all units','warn');
+}
+function updateMasterUI() {
+  const onBtn=document.getElementById('master-on-btn'), offBtn=document.getElementById('master-off-btn'), status=document.getElementById('master-status');
+  if (masterState===true)  { onBtn.classList.remove('inactive'); offBtn.classList.remove('active'); status.textContent='installation running'; status.className='master-status on'; }
+  else if (masterState===false) { onBtn.classList.add('inactive'); offBtn.classList.add('active'); status.textContent='installation off'; status.className='master-status off'; }
+  else { onBtn.classList.remove('inactive'); offBtn.classList.remove('active'); status.textContent='—'; status.className='master-status'; }
+}
+
+// ── Build cards ───────────────────────────────────────────────────────────────
+function buildCards() {
+  const grid = document.getElementById('units-grid');
+  grid.innerHTML = '';
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="unit-card" id="card-${i}">
+        <div class="card-header">
+          <div>
+            <div class="unit-id-label">Unit</div>
+            <div class="unit-id-num">0${i}
+              <span class="badge paused"      id="badge-paused-${i}"   style="display:none">paused</span>
+              <span class="badge detached"    id="badge-detached-${i}" style="display:none">detached</span>
+              <span class="badge blackout-on" id="badge-blackout-${i}" style="display:none">blackout</span>
+              <span class="badge master-off"  id="badge-master-${i}"   style="display:none">master off</span>
+              <span class="badge thermal-sd"  id="badge-thermal-${i}"  style="display:none">🌡 thermal shutdown</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+            <span class="pill waiting" id="pill-${i}">Standby</span>
+            <span class="badge ntp-fail" id="ntp-badge-${i}">ntp —</span>
+          </div>
+        </div>
+
+        <div class="monitor-row">
+          <button class="monitor-btn" id="mon-btn-${i}" onclick="toggleMonitor(${i})">Monitor</button>
+          <div class="monitor-countdown" id="mon-cd-${i}"></div>
+        </div>
+
+        <div class="pos-row">
+          <svg width="68" height="42" viewBox="0 0 68 42" style="flex-shrink:0">
+            <path d="M6,38 A28,28 0 0,1 62,38" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="5" stroke-linecap="round"/>
+            <path id="arc-${i}" d="M6,38 A28,28 0 0,1 62,38" fill="none" stroke="#c8b8f8" stroke-width="5" stroke-linecap="round" stroke-dasharray="100" stroke-dashoffset="100" style="transition:stroke-dashoffset 0.4s;opacity:0.25"/>
+            <circle id="dot-${i}" cx="34" cy="38" r="4" fill="#c8b8f8" opacity="0.2" style="transition:cx 0.4s,cy 0.4s"/>
+          </svg>
+          <div>
+            <div><span class="servo-angle-big" id="angle-${i}" style="opacity:0.3">—</span><span class="servo-deg-sm">°</span></div>
+            <div class="servo-sub" id="state-${i}">standby</div>
+          </div>
+        </div>
+
+        <div class="range-wrap">
+          <div class="range-labels">
+            <div class="range-lbl">min <span id="minval-${i}">—</span>°</div>
+            <div class="range-lbl">max <span id="maxval-${i}">—</span>°</div>
+          </div>
+          <div class="range-track">
+            <div class="range-fill"  id="rfill-${i}"  style="left:0%;width:100%"></div>
+            <div class="range-thumb" id="rthumb-${i}" style="left:50%;opacity:0.2"></div>
+          </div>
+        </div>
+
+        <div class="motion-params-row">
+          <div><div class="mp-item-lbl">Speed</div><div class="metric-val muted" id="mspeed-${i}">—</div></div>
+          <div><div class="mp-item-lbl">Hesit</div><div class="metric-val muted" id="mhesit-${i}">—</div></div>
+          <div><div class="mp-item-lbl">Pause</div><div class="metric-val muted" id="mpause-${i}">—</div></div>
+          <div><div class="mp-item-lbl">Step</div><div class="metric-val muted"  id="mstep-${i}">—</div></div>
+        </div>
+
+        <div class="sensor-bars">
+          <div class="sensor-row">
+            <div class="sensor-header">
+              <div class="sensor-label">CPU temperature</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="font-family:var(--mono);font-size:9px;color:var(--dimmed)" id="temp-thresholds-${i}"></span>
+                <div class="sensor-value muted" id="temp-val-${i}">— °C</div>
+              </div>
+            </div>
+            <div class="sensor-track"><div class="sensor-fill" id="temp-fill-${i}" style="width:0%"></div></div>
+          </div>
+          <div class="sensor-row">
+            <div class="sensor-header">
+              <div class="sensor-label">Free heap</div>
+              <div class="sensor-value muted" id="heap-val-${i}">— KB</div>
+            </div>
+            <div class="sensor-track"><div class="sensor-fill" id="heap-fill-${i}" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div class="metrics-row">
+          <div class="metric"><div class="metric-lbl">Uptime</div><div class="metric-val muted" id="uptime-${i}">—</div></div>
+          <div class="metric"><div class="metric-lbl">Wi-Fi</div><div class="metric-val muted" id="rssi-${i}">—</div></div>
+          <div class="metric"><div class="metric-lbl">Board time</div><div class="metric-val muted" id="boardtime-${i}">—</div></div>
+        </div>
+
+        <div class="board-sched-row">
+          <span>Schedule:</span><span class="val" id="boardsched-on-${i}">—</span>
+          <span>→</span><span class="val" id="boardsched-off-${i}">—</span>
+          <span style="margin-left:8px">Blackouts:</span>
+          <span class="val" id="boardblackouts-${i}" style="color:var(--amber)">none</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="ctrl-group-label">Sequence</div>
+        <div class="ctrl-row">
+          <button class="btn b-pause"  onclick="sendCmd(${i},'pause')">Pause</button>
+          <button class="btn b-resume" onclick="sendCmd(${i},'resume')">Resume</button>
+          <button class="btn b-detach" onclick="sendCmd(${i},'detach')">Detach</button>
+          <button class="btn b-attach" onclick="sendCmd(${i},'attach')">Attach</button>
+        </div>
+
+        <div class="ctrl-group-label">Go to</div>
+        <div class="ctrl-row">
+          <button class="btn b-goto" onclick="sendCmd(${i},'goto_min')">Min</button>
+          <button class="btn b-goto" onclick="sendCmd(${i},'goto_mid')">90°</button>
+          <button class="btn b-goto" onclick="sendCmd(${i},'goto_max')">Max</button>
+          <button class="btn b-adj"  onclick="sendCmd(${i},'adjust_up')">+5°</button>
+          <button class="btn b-adj"  onclick="sendCmd(${i},'adjust_down')">−5°</button>
+        </div>
+
+        <div class="ctrl-group-label">Set limits</div>
+        <div class="set-limit-row">
+          <div class="limit-wrap"><label>Min</label><input class="num-input" type="number" id="set-min-${i}" min="0" max="180" placeholder="°"/></div>
+          <div class="limit-wrap"><label>Max</label><input class="num-input" type="number" id="set-max-${i}" min="0" max="180" placeholder="°"/></div>
+          <button class="btn-set" onclick="sendLimits(${i})">Set</button>
+        </div>
+
+        <div class="last-seen" id="lastseen-${i}">never monitored</div>
+      </div>
+    `);
+  }
+}
+
+// ── Sensor bar update ─────────────────────────────────────────────────────────
+function updateTempBar(id, temp, cutoff, resume) {
+  const fillEl = document.getElementById(`temp-fill-${id}`);
+  const valEl  = document.getElementById(`temp-val-${id}`);
+  const thrEl  = document.getElementById(`temp-thresholds-${id}`);
+
+  // Update threshold hint
+  if (cutoff != null && resume != null) {
+    thrEl.textContent = `resume ${resume}° / shutdown ${cutoff}°`;
+  }
+
+  if (temp == null) { fillEl.style.width='0%'; valEl.textContent='— °C'; valEl.className='sensor-value muted'; return; }
+  const max = cutoff ? cutoff + 10 : 85;
+  fillEl.style.width = Math.min(100, (temp/max)*100).toFixed(1)+'%';
+  let cls, color;
+  if      (temp < (resume || 55))  { cls='good'; color='#4ade80'; }
+  else if (temp < (cutoff || 65))  { cls='warn'; color='#fbbf24'; }
+  else                             { cls='bad';  color='#f87171'; }
+  fillEl.style.background = color;
+  valEl.className = 'sensor-value ' + cls;
+  valEl.textContent = temp.toFixed(1) + ' °C';
+}
+
+function updateHeapBar(id, heap) {
+  const fillEl = document.getElementById(`heap-fill-${id}`);
+  const valEl  = document.getElementById(`heap-val-${id}`);
+  if (heap==null) { fillEl.style.width='0%'; valEl.textContent='— KB'; valEl.className='sensor-value muted'; return; }
+  fillEl.style.width = Math.min(100,(heap/HEAP_MAX)*100).toFixed(1)+'%';
+  const cls   = heap>HEAP_WARN?'good':heap>HEAP_BAD?'warn':'bad';
+  const color = heap>HEAP_WARN?'#4ade80':heap>HEAP_BAD?'#fbbf24':'#f87171';
+  fillEl.style.background=color; valEl.className='sensor-value '+cls;
+  valEl.textContent = (heap/1024).toFixed(0)+' KB';
+}
+
+function clearSensors(id) {
+  updateTempBar(id,null,null,null); updateHeapBar(id,null);
+}
+
+// ── Monitor control ───────────────────────────────────────────────────────────
+function toggleMonitor(id) {
+  if (units[id].monitoring) { sendCmd(id,'monitor_off'); stopMonitorUI(id); }
+  else                      { sendCmd(id,'monitor_on');  startMonitorUI(id); }
+}
+
+function startMonitorUI(id) {
+  units[id].monitoring=true;
+  document.getElementById(`mon-btn-${id}`).textContent='Stop';
+  document.getElementById(`mon-btn-${id}`).classList.add('active');
+  document.getElementById(`card-${id}`).classList.add('monitoring-active');
+  let remaining=MONITOR_MS/1000;
+  const cdEl=document.getElementById(`mon-cd-${id}`);
+  if (monitorCountdowns[id]) clearInterval(monitorCountdowns[id]);
+  monitorCountdowns[id]=setInterval(()=>{
+    remaining--;
+    if (remaining<=0) { stopMonitorUI(id); return; }
+    cdEl.textContent=`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`;
+  },1000);
+  cdEl.textContent='2:00';
+}
+
+function stopMonitorUI(id) {
+  units[id].monitoring=false;
+  document.getElementById(`mon-btn-${id}`).textContent='Monitor';
+  document.getElementById(`mon-btn-${id}`).classList.remove('active');
+  document.getElementById(`card-${id}`).classList.remove('monitoring-active');
+  if (monitorCountdowns[id]) { clearInterval(monitorCountdowns[id]); delete monitorCountdowns[id]; }
+  document.getElementById(`mon-cd-${id}`).textContent='';
+  document.getElementById(`angle-${id}`).style.opacity='0.3';
+  document.getElementById(`arc-${id}`).style.opacity='0.25';
+  document.getElementById(`dot-${id}`).style.opacity='0.2';
+  document.getElementById(`rthumb-${id}`).style.opacity='0.2';
+  document.getElementById(`pill-${id}`).className='pill waiting';
+  document.getElementById(`pill-${id}`).textContent='Standby';
+  document.getElementById(`state-${id}`).textContent='standby';
+  clearSensors(id);
+}
+
+function monitorAll() { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_on');startMonitorUI(i);}addLog('monitor on → all units','ok'); }
+function stopAll()    { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_off');stopMonitorUI(i);}addLog('monitor off → all units','warn'); }
+
+// ── Arc + range bar ───────────────────────────────────────────────────────────
+function updateArc(id,angle) {
+  const ratio=Math.max(0,Math.min(1,angle/180));
+  const arc=document.getElementById(`arc-${id}`), dot=document.getElementById(`dot-${id}`);
+  if (!arc) return;
+  arc.setAttribute('stroke-dashoffset',(100*(1-ratio)).toFixed(1));
+  arc.style.opacity='1';
+  const a=Math.PI*(1-ratio);
+  dot.setAttribute('cx',(34+28*Math.cos(a)).toFixed(1));
+  dot.setAttribute('cy',(38-28*Math.sin(a)).toFixed(1));
+  dot.setAttribute('opacity','1');
+}
+
+function updateRangeBar(id,angle,minL,maxL) {
+  if (minL==null||maxL==null||minL>=maxL) return;
+  document.getElementById(`rfill-${id}`).style.left  = ((minL/180)*100).toFixed(1)+'%';
+  document.getElementById(`rfill-${id}`).style.width = (((maxL-minL)/180)*100).toFixed(1)+'%';
+  document.getElementById(`minval-${id}`).textContent=Math.round(minL);
+  document.getElementById(`maxval-${id}`).textContent=Math.round(maxL);
+  if (angle!=null) { document.getElementById(`rthumb-${id}`).style.left=((angle/180)*100).toFixed(1)+'%'; document.getElementById(`rthumb-${id}`).style.opacity='1'; }
+}
+
+// ── Card refresh ──────────────────────────────────────────────────────────────
+function formatUptime(s) { if(s==null)return'—'; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m ${s%60}s`; }
+function rssiClass(v)    { if(v==null)return'muted'; return v>=-65?'good':v>=-75?'warn':'bad'; }
+function isBlackoutToday(list) { if(!list||!list.length)return false; const now=new Date(), t=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0'); return list.includes(t); }
+
+function formatLastSeen(ts) {
+  if (!ts) return 'never seen';
+  const age = Date.now() - ts;
+  const s = Math.floor(age/1000), m = Math.floor(s/60), h = Math.floor(m/60), d = Math.floor(h/24);
+  if (d > 0)  return `last seen ${d}d ${h%24}h ago`;
+  if (h > 0)  return `last seen ${h}h ${m%60}m ago`;
+  if (m > 0)  return `last seen ${m}m ${s%60}s ago`;
+  return `last seen ${s}s ago`;
+}
+
+function saveLastSeen(id, ts, temp, heap) {
+  try {
+    localStorage.setItem(`unit${id}_lastSeen`, ts);
+    if (temp != null) localStorage.setItem(`unit${id}_lastTemp`, temp);
+    if (heap != null) localStorage.setItem(`unit${id}_lastHeap`, heap);
+  } catch(e) {}
+}
+
+function loadLastSeen(id) {
+  try {
+    return {
+      ts:   parseInt(localStorage.getItem(`unit${id}_lastSeen`)) || null,
+      temp: parseFloat(localStorage.getItem(`unit${id}_lastTemp`)) || null,
+      heap: parseInt(localStorage.getItem(`unit${id}_lastHeap`)) || null
+    };
+  } catch(e) { return {ts:null, temp:null, heap:null}; }
+}
+
+function updateLastSeenDisplay(id) {
+  const u = units[id];
+  const saved = loadLastSeen(id);
+  const ts = u.lastSeen || saved.ts;
+  document.getElementById(`lastseen-${id}`).textContent = formatLastSeen(ts);
+
+  // Show last known sensor values when not actively monitoring
+  if (!u.monitoring) {
+    const temp = saved.temp;
+    const heap = saved.heap;
+    if (temp != null) {
+      const valEl = document.getElementById(`temp-val-${id}`);
+      valEl.textContent = temp.toFixed(1) + ' °C (last known)';
+      valEl.className   = 'sensor-value muted';
+    }
+    if (heap != null) {
+      const valEl = document.getElementById(`heap-val-${id}`);
+      valEl.textContent = (heap/1024).toFixed(0) + ' KB (last known)';
+      valEl.className   = 'sensor-value muted';
+    }
+  }
+}
+
+function refreshCard(id) {
+  const u=units[id];
+
+  // Always update last seen display regardless of monitoring state
+  updateLastSeenDisplay(id);
+
+  if (!u.monitoring) return;
+
+  const age=u.lastSeen?Date.now()-u.lastSeen:Infinity;
+  const sc=age<10000?'online':age<30000?'stale':'offline';
+  const isThermal=u.thermalSd===true;
+
+  let cardClass='unit-card monitoring-active '+sc;
+  if (isThermal) cardClass+=' thermal-shutdown';
+  document.getElementById(`card-${id}`).className=cardClass;
+
+  const pill=document.getElementById(`pill-${id}`);
+  pill.className='pill live'; pill.textContent='Live';
+
+  const todayBlackout=isBlackoutToday(u.blackouts), isMasterOff=u.master===false;
+
+  document.getElementById(`badge-paused-${id}`).style.display    = (u.paused&&!u.detached&&!isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-detached-${id}`).style.display  = (u.detached&&!todayBlackout&&!isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-blackout-${id}`).style.display  = (todayBlackout&&!isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-master-${id}`).style.display    = (isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-thermal-${id}`).style.display   = isThermal?'inline-block':'none';
+
+  const ntpBadge=document.getElementById(`ntp-badge-${id}`);
+  if      (u.ntpSynced===true)  { ntpBadge.className='badge ntp-ok';   ntpBadge.textContent='ntp ok'; }
+  else if (u.ntpSynced===false) { ntpBadge.className='badge ntp-fail'; ntpBadge.textContent='ntp fail'; }
+
+  const angleEl=document.getElementById(`angle-${id}`);
+  angleEl.textContent=u.angle!=null?Math.round(u.angle):'—';
+  angleEl.style.opacity='1';
+
+  let stateText='live';
+  if (isThermal)         stateText='thermal shutdown';
+  else if (isMasterOff)  stateText='master off';
+  else if (todayBlackout)stateText='blackout day';
+  else if (u.detached)   stateText='detached';
+  else if (u.paused)     stateText='paused';
+  else if (u.angle!=null)stateText='running';
+  document.getElementById(`state-${id}`).textContent=stateText;
+
+  const up=document.getElementById(`uptime-${id}`); up.textContent=formatUptime(u.uptime); up.className='metric-val '+(u.uptime!=null?'good':'muted');
+  const rs=document.getElementById(`rssi-${id}`);   rs.textContent=u.rssi!=null?`${u.rssi} dBm`:'—'; rs.className='metric-val '+rssiClass(u.rssi);
+  const bt=document.getElementById(`boardtime-${id}`); bt.textContent=u.boardTime||'—'; bt.className='metric-val '+(u.boardTime?'good':'muted');
+
+  document.getElementById(`boardsched-on-${id}`).textContent  = u.schedOn  || '—';
+  document.getElementById(`boardsched-off-${id}`).textContent = u.schedOff || '—';
+  document.getElementById(`boardblackouts-${id}`).textContent = (u.blackouts&&u.blackouts.length>0)?u.blackouts.join(', '):'none';
+  // last seen is handled by updateLastSeenDisplay() above
+
+  if (u.mSpeed!=null) {
+    document.getElementById(`mspeed-${id}`).textContent=u.mSpeed+'ms'; document.getElementById(`mspeed-${id}`).className='metric-val good';
+    document.getElementById(`mhesit-${id}`).textContent=u.mHesit;      document.getElementById(`mhesit-${id}`).className='metric-val good';
+    document.getElementById(`mpause-${id}`).textContent=u.mPause+'s';  document.getElementById(`mpause-${id}`).className='metric-val good';
+    document.getElementById(`mstep-${id}`).textContent=(u.mStep/10).toFixed(1)+'°'; document.getElementById(`mstep-${id}`).className='metric-val good';
+    if (id===controlUnit) updateBoardValues(id);
+  }
+
+  updateTempBar(id, u.cpuTemp, u.tCutoff, u.tResume);
+  updateHeapBar(id, u.freeHeap);
+
+  if (u.angle!=null) updateArc(id,u.angle);
+  updateRangeBar(id,u.angle,u.minLimit,u.maxLimit);
+
+  if (u.master!=null&&masterState===null) { masterState=u.master; updateMasterUI(); }
+
+  // Log thermal events
+  if (isThermal && !units[id]._thermalLogged) { units[id]._thermalLogged=true; addLog(`unit ${id}: thermal shutdown triggered`,'err'); }
+  if (!isThermal && units[id]._thermalLogged) { units[id]._thermalLogged=false; addLog(`unit ${id}: thermal protection cleared`,'ok'); }
+}
+
+// ── Commands ──────────────────────────────────────────────────────────────────
+function sendCmd(unitId,cmd) {
+  if (!client||!client.connected) { addLog('not connected','err'); return; }
+  client.publish(`museum/unit${unitId}/cmd`,cmd);
+  const silent=['monitor_on','monitor_off','set_speed','set_hesitation','set_pause','set_step','save_motion','set_temp_cutoff','set_temp_resume','save_thermal'];
+  if (!silent.some(s=>cmd.startsWith(s))) addLog(`→ unit ${unitId}: ${cmd}`,'warn');
+  if (cmd==='detach'){units[unitId].detached=true; units[unitId].paused=true;}
+  if (cmd==='attach'){units[unitId].detached=false;units[unitId].paused=false;}
+  if (cmd==='pause') units[unitId].paused=true;
+  if (cmd==='resume')units[unitId].paused=false;
+}
+
+function sendLimits(unitId) {
+  const minEl=document.getElementById(`set-min-${unitId}`), maxEl=document.getElementById(`set-max-${unitId}`);
+  const minV=parseInt(minEl.value), maxV=parseInt(maxEl.value);
+  if (!isNaN(minV)&&minV>=0&&minV<=180){sendCmd(unitId,`set_min:${minV}`);units[unitId].minLimit=minV;minEl.value='';}
+  if (!isNaN(maxV)&&maxV>=0&&maxV<=180){sendCmd(unitId,`set_max:${maxV}`);units[unitId].maxLimit=maxV;maxEl.value='';}
+}
+
+function sendCmdAll(cmd) { for(let i=1;i<=UNIT_COUNT;i++) sendCmd(i,cmd); }
+function rebootAll()    { if(!confirm('Reboot all units?'))return; for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,'reboot'); addLog('reboot → all units','warn'); }
+function resetWifiAll() { if(!confirm('Reset Wi-Fi on all units?'))return; for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,'reset_wifi'); addLog('reset_wifi → all units','err'); }
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+function sendScheduleToAll() {
+  const onVal=document.getElementById('new-sched-on').value, offVal=document.getElementById('new-sched-off').value;
+  if (!onVal||!offVal){addLog('enter both on and off times','err');return;}
+  for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,`set_on:${onVal}`);sendCmd(i,`set_off:${offVal}`);}
+  const c=document.getElementById('sched-confirm');
+  c.innerHTML=`<span style="color:var(--green)">sent ${onVal} → ${offVal} to all units</span>`;
+  setTimeout(()=>c.innerHTML='',4000);
+  addLog(`board schedule: ${onVal} → ${offVal}`,'ok');
+}
+
+function renderBlackoutTags() {
+  const c=document.getElementById('blackout-tags-display');
+  if(!dashboardBlackouts.size){c.innerHTML='<span class="blackout-tags-empty">no blackout dates set</span>';return;}
+  c.innerHTML=Array.from(dashboardBlackouts).sort().map(d=>`<div class="blackout-tag">${d}<button onclick="removeBlackoutFromAll('${d}')">×</button></div>`).join('');
+}
+
+function addBlackoutToAll() {
+  const input=document.getElementById('blackout-date');
+  if(!input.value){addLog('select a date first','err');return;}
+  const p=input.value.split('-'), d=`${p[2]}/${p[1]}`;
+  dashboardBlackouts.add(d); renderBlackoutTags();
+  for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,`add_blackout:${d}`);
+  const c=document.getElementById('blackout-confirm');
+  c.innerHTML=`<span style="color:var(--amber)">blackout ${d} sent</span>`;
+  setTimeout(()=>c.innerHTML='',4000);
+  addLog(`blackout added: ${d}`,'warn'); input.value='';
+}
+
+function removeBlackoutFromAll(d) {
+  dashboardBlackouts.delete(d); renderBlackoutTags();
+  for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,`remove_blackout:${d}`);
+  addLog(`blackout removed: ${d}`,'warn');
+}
+
+function toggleSchedule() {
+  schedActive=!schedActive;
+  const btn=document.getElementById('sched-btn');
+  btn.textContent=schedActive?'Disable':'Enable';
+  btn.classList.toggle('on',schedActive);
+  if(schedActive){lastSchedState=null;checkSchedule();schedInterval=setInterval(checkSchedule,30000);addLog('override enabled','ok');}
+  else{clearInterval(schedInterval);schedInterval=null;lastSchedState=null;document.getElementById('sched-status').textContent='override off';document.getElementById('sched-status').className='status-text';document.getElementById('sched-next').textContent='';addLog('override disabled','warn');}
+}
+
+function checkSchedule() {
+  if(!schedActive)return;
+  const now=new Date(),cur=now.getHours()*60+now.getMinutes();
+  const on=document.getElementById('sched-on').value.split(':'),off=document.getElementById('sched-off').value.split(':');
+  const onM=parseInt(on[0])*60+parseInt(on[1]),offM=parseInt(off[0])*60+parseInt(off[1]);
+  const run=cur>=onM&&cur<offM;
+  const s=document.getElementById('sched-status'),n=document.getElementById('sched-next');
+  if(run&&lastSchedState!=='on'){lastSchedState='on';sendCmdAll('attach');setTimeout(()=>sendCmdAll('resume'),1500);s.textContent='override: running';s.className='status-text active';n.textContent=`pauses at ${document.getElementById('sched-off').value}`;addLog('override: attach + resume → all','ok');}
+  else if(!run&&lastSchedState!=='off'){lastSchedState='off';sendCmdAll('detach');s.textContent='override: detached';s.className='status-text';n.textContent=`resumes at ${document.getElementById('sched-on').value}`;addLog('override: detach → all','warn');}
+}
+
+// ── Broker ────────────────────────────────────────────────────────────────────
+function setConnStatus(state,label) {
+  document.getElementById('conn-dot').className='conn-dot '+state;
+  const lbl=document.getElementById('conn-label');
+  lbl.textContent=label;
+  lbl.style.color=state==='connected'?'var(--green)':state==='error'?'var(--red)':state==='connecting'?'var(--amber)':'var(--dimmed)';
+}
+
+function toggleConnect() {
+  if(client&&client.connected){client.end();setConnStatus('','disconnected');addLog('disconnected','warn');return;}
+  doConnect();
+}
+
+function doConnect() {
+  const url=document.getElementById('inp-url').value.trim(),user=document.getElementById('inp-user').value.trim(),pass=document.getElementById('inp-pass').value.trim();
+  if(!url){addLog('enter broker URL first','err');return;}
+  setConnStatus('connecting','connecting…');addLog('connecting…','info');
+  try{client=mqtt.connect(url,{username:user||undefined,password:pass||undefined,reconnectPeriod:5000,connectTimeout:10000});}
+  catch(e){setConnStatus('error','error');addLog('failed: '+e.message,'err');return;}
+
+  client.on('connect',()=>{
+    setConnStatus('connected','connected');addLog('broker connected','ok');
+    client.subscribe('museum/#',err=>{if(!err)addLog('subscribed to museum/#','ok');});
+    if(schedActive){lastSchedState=null;checkSchedule();}
+    // Start background health monitoring
+    if (!healthTimer) startHealthMonitoring();
+  });
+
+  client.on('message',(topic,payload)=>{
+    try {
+      const d=JSON.parse(payload.toString()),id=parseInt(d.unit);
+      if(!id||id<1||id>UNIT_COUNT)return;
+      units[id].uptime    = d.uptime_s;
+      units[id].paused    = d.paused;
+      units[id].detached  = d.detached;
+      units[id].rssi      = d.wifi_rssi;
+      units[id].ntpSynced = d.ntp_synced;
+      units[id].boardTime = d.board_time || null;
+      units[id].schedOn   = d.sched_on   || null;
+      units[id].schedOff  = d.sched_off  || null;
+      units[id].blackouts = d.blackouts ? d.blackouts.split(',').filter(x=>x) : [];
+      units[id].master    = d.master    != null ? d.master    : null;
+      units[id].cpuTemp   = d.cpu_temp  != null ? d.cpu_temp  : null;
+      units[id].freeHeap  = d.free_heap != null ? d.free_heap : null;
+      units[id].mSpeed    = d.m_speed   != null ? d.m_speed   : null;
+      units[id].mHesit    = d.m_hesit   != null ? d.m_hesit   : null;
+      units[id].mPause    = d.m_pause   != null ? d.m_pause   : null;
+      units[id].mStep     = d.m_step    != null ? d.m_step    : null;
+      units[id].tCutoff   = d.t_cutoff  != null ? d.t_cutoff  : null;
+      units[id].tResume   = d.t_resume  != null ? d.t_resume  : null;
+      units[id].thermalSd = d.thermal_sd === true;
+
+      // Always record temp for health log whenever we receive it
+      if (d.cpu_temp != null) recordHealthSample(id, d.cpu_temp);
+
+      if(d.master!=null&&masterState===null){masterState=d.master;updateMasterUI();}
+      if(id===controlUnit&&d.m_speed!=null)syncControlSliders(id);
+
+      if(d.monitoring===false){stopMonitorUI(id);}
+      else if(d.monitoring===true){
+        units[id].angle=d.servo_angle; units[id].minLimit=d.min_limit; units[id].maxLimit=d.max_limit;
+        units[id].lastSeen=Date.now();
+        saveLastSeen(id, units[id].lastSeen, units[id].cpuTemp, units[id].freeHeap);
+        if(!units[id].monitoring)startMonitorUI(id);
+        refreshCard(id);
+      }
+    }catch(e){}
+  });
+
+  client.on('error',    e=>{setConnStatus('error','error');addLog('error: '+e.message,'err');});
+  client.on('offline',  ()=>{setConnStatus('','offline');addLog('broker offline','warn');});
+  client.on('reconnect',()=>{setConnStatus('connecting','reconnecting…');addLog('reconnecting…','warn');});
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function addLog(msg,type='info') {
+  const log=document.getElementById('log'),el=document.createElement('div');
+  el.className='log-entry';
+  el.innerHTML=`<span class="log-time">${new Date().toTimeString().slice(0,8)}</span><span class="log-msg ${type}">${msg}</span>`;
+  log.prepend(el);
+  while(log.children.length>60)log.removeChild(log.lastChild);
+}
+
+// ── Health log ────────────────────────────────────────────────────────────────
+const HEALTH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const HEALTH_SAMPLE_WAIT = 4000;           // wait 4s for response after monitor_on
+let healthTimer       = null;
+let healthCheckActive = false;
+let healthLastDate    = null;
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function loadHealthLog() {
+  try { return JSON.parse(localStorage.getItem('healthLog') || '{}'); } catch(e) { return {}; }
+}
+
+function saveHealthLog(log) {
+  try { localStorage.setItem('healthLog', JSON.stringify(log)); } catch(e) {}
+}
+
+function recordHealthSample(unitId, temp) {
+  if (temp == null) return;
+  const log    = loadHealthLog();
+  const today  = todayKey();
+  if (!log[today])        log[today] = {};
+  if (!log[today][unitId]) log[today][unitId] = [];
+  log[today][unitId].push({ t: Date.now(), temp });
+  // Keep only last 2 days
+  const keys = Object.keys(log).sort();
+  while (keys.length > 2) { delete log[keys.shift()]; keys.shift(); }
+  saveHealthLog(log);
+}
+
+function getHealthStats(readings) {
+  if (!readings || !readings.length) return null;
+  const temps = readings.map(r => r.temp);
+  return {
+    min:  Math.min(...temps),
+    max:  Math.max(...temps),
+    avg:  temps.reduce((a,b)=>a+b,0) / temps.length,
+    count: temps.length,
+    readings
+  };
+}
+
+function tempClass(t) {
+  if (t == null) return 'muted';
+  return t < 50 ? 'good' : t < 65 ? 'warn' : 'bad';
+}
+
+function drawChart(canvasId, readings, cutoff) {
+  const container = document.getElementById(canvasId);
+  if (!container) return;
+  if (!readings || readings.length < 2) {
+    container.innerHTML = '<div class="health-chart-empty">collecting data…</div>';
+    return;
+  }
+  const w = container.offsetWidth || 300;
+  const h = 60;
+  const temps  = readings.map(r => r.temp);
+  const times  = readings.map(r => r.t);
+  const minT   = Math.min(...temps) - 2;
+  const maxT   = Math.max(Math.max(...temps) + 2, (cutoff || 70));
+  const tRange = maxT - minT;
+  const tMin   = Math.min(...times);
+  const tMax   = Math.max(...times);
+  const tRange2= tMax - tMin || 1;
+
+  const pts = readings.map(r => {
+    const x = ((r.t - tMin) / tRange2) * w;
+    const y = h - ((r.temp - minT) / tRange) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  // Cutoff line
+  const cutoffY = cutoff ? (h - ((cutoff - minT) / tRange) * h).toFixed(1) : null;
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" class="health-chart-line">
+      ${cutoffY ? `<line x1="0" y1="${cutoffY}" x2="${w}" y2="${cutoffY}" stroke="rgba(248,113,113,0.3)" stroke-width="1" stroke-dasharray="3,3"/>` : ''}
+      <polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+      <circle cx="${pts[pts.length-1].split(',')[0]}" cy="${pts[pts.length-1].split(',')[1]}" r="2.5" fill="var(--accent)"/>
+    </svg>
+    <div class="health-chart-label">${temps[temps.length-1].toFixed(1)}°C</div>
+  `;
+}
+
+function renderHealthGrid() {
+  const log    = loadHealthLog();
+  const today  = todayKey();
+  const keys   = Object.keys(log).sort();
+  const yesterday = keys.filter(k => k !== today).pop() || null;
+  const grid   = document.getElementById('health-grid');
+  if (!grid) return;
+
+  let html = '';
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    const todayStats     = getHealthStats(log[today]?.[i]);
+    const yestStats      = getHealthStats(log[yesterday]?.[i]);
+    const cutoff         = units[i].tCutoff || 65;
+
+    const avg  = todayStats ? todayStats.avg.toFixed(1)  : '—';
+    const min  = todayStats ? todayStats.min.toFixed(1)  : '—';
+    const max  = todayStats ? todayStats.max.toFixed(1)  : '—';
+    const cnt  = todayStats ? todayStats.count           : 0;
+
+    html += `
+      <div class="health-card">
+        <div class="health-card-header">
+          <div class="health-card-title">Unit 0${i}</div>
+          <div class="health-card-date">${today} · ${cnt} reading${cnt!==1?'s':''}</div>
+        </div>
+        <div class="health-stats">
+          <div class="health-stat"><div class="health-stat-lbl">Avg</div><div class="health-stat-val ${todayStats?tempClass(todayStats.avg):'muted'}">${avg}${todayStats?'°':''}</div></div>
+          <div class="health-stat"><div class="health-stat-lbl">Min</div><div class="health-stat-val ${todayStats?tempClass(todayStats.min):'muted'}">${min}${todayStats?'°':''}</div></div>
+          <div class="health-stat"><div class="health-stat-lbl">Max</div><div class="health-stat-val ${todayStats?tempClass(todayStats.max):'muted'}">${max}${todayStats?'°':''}</div></div>
+        </div>
+        <div class="health-chart" id="hchart-${i}">
+          <div class="health-chart-empty">no data yet</div>
+        </div>
+        ${yestStats ? `
+        <div class="health-yesterday">
+          <span>Yesterday:</span>
+          avg ${yestStats.avg.toFixed(1)}° &nbsp;
+          min ${yestStats.min.toFixed(1)}° &nbsp;
+          max ${yestStats.max.toFixed(1)}° &nbsp;
+          (${yestStats.count} readings)
+        </div>` : ''}
+      </div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // Draw charts after DOM update
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    const stats  = getHealthStats(log[today]?.[i]);
+    const cutoff = units[i].tCutoff || 65;
+    if (stats) drawChart(`hchart-${i}`, stats.readings, cutoff);
+  }
+}
+
+function runHealthCheck() {
+  if (!client || !client.connected) { addLog('health check: not connected','warn'); return; }
+  if (healthCheckActive) return;
+  healthCheckActive = true;
+
+  const dot    = document.getElementById('health-dot');
+  const status = document.getElementById('health-status');
+  if (dot)    dot.className    = 'dot';
+  if (status) status.textContent = 'checking…';
+
+  // Send monitor_on to all units — board will reply with temp in payload
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    if (client && client.connected) client.publish(`museum/unit${i}/cmd`, 'monitor_on');
+  }
+
+  // Wait for responses then stop monitoring
+  setTimeout(() => {
+    for (let i = 1; i <= UNIT_COUNT; i++) {
+      if (client && client.connected) client.publish(`museum/unit${i}/cmd`, 'monitor_off');
+      // Record whatever temp we got during this window
+      if (units[i].cpuTemp != null) {
+        recordHealthSample(i, units[i].cpuTemp);
+      }
+    }
+    healthCheckActive = false;
+    if (dot)    { dot.className = 'dot idle'; }
+    if (status) { status.textContent = 'idle'; }
+    renderHealthGrid();
+    scheduleNextHealthCheck();
+  }, HEALTH_SAMPLE_WAIT);
+}
+
+function scheduleNextHealthCheck() {
+  if (healthTimer) clearTimeout(healthTimer);
+  healthTimer = setTimeout(() => {
+    checkAndResetHealthLog();
+    runHealthCheck();
+  }, HEALTH_INTERVAL_MS);
+
+  const next = new Date(Date.now() + HEALTH_INTERVAL_MS);
+  const el   = document.getElementById('health-next');
+  if (el) el.textContent = `next check at ${next.toTimeString().slice(0,5)}`;
+}
+
+function checkAndResetHealthLog() {
+  // If the day has changed since last check, the new key will be different — no action needed
+  // localStorage naturally separates by date key
+  const today = todayKey();
+  if (healthLastDate && healthLastDate !== today) {
+    addLog(`health log: new day started (${today})`, 'info');
+  }
+  healthLastDate = today;
+}
+
+function clearHealthLog() {
+  if (!confirm('Clear all health log data?')) return;
+  try { localStorage.removeItem('healthLog'); } catch(e) {}
+  renderHealthGrid();
+  addLog('health log cleared', 'warn');
+}
+
+function startHealthMonitoring() {
+  healthLastDate = todayKey();
+  renderHealthGrid();
+  scheduleNextHealthCheck();
+  addLog('health monitoring started — checks every 5 minutes', 'info');
+}
+
+function tick(){
+  document.getElementById('clock').textContent=new Date().toLocaleString();
+  for (let i = 1; i <= UNIT_COUNT; i++) updateLastSeenDisplay(i);
+}
+
+// Load persisted last seen on startup and show on cards
+function initLastSeen() {
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    const saved = loadLastSeen(i);
+    if (saved.ts) {
+      units[i].lastSeen = null; // don't override with stale in-memory value
+      updateLastSeenDisplay(i);
+    }
+  }
+}
+
+buildCards(); updateMasterUI(); initLastSeen(); renderHealthGrid(); setInterval(tick,1000); tick();
+</script>
+</body>
+</html>
