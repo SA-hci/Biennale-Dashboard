@@ -366,6 +366,29 @@
     <span class="save-flash thermal" id="thermal-saved"></span>
     <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Cutoff must be ≥ Resume + 5°C</span>
   </div>
+
+  <div class="control-section-label">Cooldown cycle</div>
+  <div class="params-grid">
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Active window <span style="color:var(--dimmed);font-size:9px">(minutes before rest)</span></div>
+        <div><span class="param-value" id="cdactive-display">10 min</span><span class="param-board" id="cdactive-board"> · board: —</span></div>
+      </div>
+      <input type="range" id="cdactive-slider" min="2" max="30" value="10" oninput="onParamSlider('cdactive')" onchange="sendParamLive('cdactive')" />
+    </div>
+    <div class="param-row">
+      <div class="param-header">
+        <div class="param-label">Rest duration <span style="color:var(--dimmed);font-size:9px">(minutes detached)</span></div>
+        <div><span class="param-value" id="cdrest-display">1 min</span><span class="param-board" id="cdrest-board"> · board: —</span></div>
+      </div>
+      <input type="range" id="cdrest-slider" min="1" max="10" value="1" oninput="onParamSlider('cdrest')" onchange="sendParamLive('cdrest')" />
+    </div>
+  </div>
+  <div class="control-actions">
+    <button class="btn-save motion" onclick="saveCooldown()">Save cooldown to flash</button>
+    <span class="save-flash motion" id="cooldown-saved"></span>
+    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Changes apply on next cooldown cycle</span>
+  </div>
 </div>
 
 <div class="panel">
@@ -442,7 +465,8 @@ for (let i = 1; i <= UNIT_COUNT; i++) {
     schedOn:null,schedOff:null,blackouts:[],monitoring:false,master:null,
     cpuTemp:null,freeHeap:null,lastSeen:null,
     mSpeed:null,mHesit:null,mPause:null,mStep:null,
-    tCutoff:null,tResume:null,thermalSd:false
+    tCutoff:null,tResume:null,thermalSd:false,
+    cdActive:null,cdRest:null,inCooldown:false
   };
 }
 
@@ -457,6 +481,7 @@ function syncControlSliders(id) {
   const u = units[id];
   if (u.mSpeed  != null) { document.getElementById('speed-slider').value  = u.mSpeed; document.getElementById('hesit-slider').value  = u.mHesit; document.getElementById('pause-slider').value  = u.mPause; document.getElementById('step-slider').value   = u.mStep; }
   if (u.tCutoff != null) { document.getElementById('cutoff-slider').value = u.tCutoff; document.getElementById('resume-slider').value = u.tResume; }
+  if (u.cdActive != null) { document.getElementById('cdactive-slider').value = u.cdActive; document.getElementById('cdrest-slider').value = u.cdRest; }
   updateAllDisplays();
   updateBoardValues(id);
 }
@@ -474,6 +499,8 @@ function updateAllDisplays() {
   document.getElementById('step-display').textContent   = (step/10).toFixed(1) + '°';
   document.getElementById('cutoff-display').textContent = cutoff + '°C';
   document.getElementById('resume-display').textContent = resume + '°C';
+  document.getElementById('cdactive-display').textContent = parseInt(document.getElementById('cdactive-slider').value) + ' min';
+  document.getElementById('cdrest-display').textContent   = parseInt(document.getElementById('cdrest-slider').value)   + ' min';
 }
 
 function updateBoardValues(id) {
@@ -484,13 +511,15 @@ function updateBoardValues(id) {
   document.getElementById('step-board').textContent   = u.mStep   != null ? ` · board: ${(u.mStep/10).toFixed(1)}°` : ' · board: —';
   document.getElementById('cutoff-board').textContent = u.tCutoff != null ? ` · board: ${u.tCutoff}°C`           : ' · board: —';
   document.getElementById('resume-board').textContent = u.tResume != null ? ` · board: ${u.tResume}°C`           : ' · board: —';
+  document.getElementById('cdactive-board').textContent = u.cdActive != null ? ` · board: ${u.cdActive}min`      : ' · board: —';
+  document.getElementById('cdrest-board').textContent   = u.cdRest   != null ? ` · board: ${u.cdRest}min`        : ' · board: —';
 }
 
 function onParamSlider(param) { updateAllDisplays(); }
 
 function sendParamLive(param) {
   const val = document.getElementById(`${param}-slider`).value;
-  const map = { speed:'set_speed', hesit:'set_hesitation', pause:'set_pause', step:'set_step', cutoff:'set_temp_cutoff', resume:'set_temp_resume' };
+  const map = { speed:'set_speed', hesit:'set_hesitation', pause:'set_pause', step:'set_step', cutoff:'set_temp_cutoff', resume:'set_temp_resume', cdactive:'set_cd_active', cdrest:'set_cd_rest' };
   sendCmd(controlUnit, `${map[param]}:${val}`);
 }
 
@@ -508,6 +537,14 @@ function saveThermal() {
   el.textContent = `saved to unit ${controlUnit}`;
   setTimeout(() => el.textContent = '', 3000);
   addLog(`thermal saved to unit ${controlUnit}`, 'ok');
+}
+
+function saveCooldown() {
+  sendCmd(controlUnit, 'save_cooldown');
+  const el = document.getElementById('cooldown-saved');
+  el.textContent = `saved to unit ${controlUnit}`;
+  setTimeout(() => el.textContent = '', 3000);
+  addLog(`cooldown saved to unit ${controlUnit}`, 'ok');
 }
 
 // ── Master switch ─────────────────────────────────────────────────────────────
@@ -539,6 +576,7 @@ function buildCards() {
               <span class="badge blackout-on" id="badge-blackout-${i}" style="display:none">blackout</span>
               <span class="badge master-off"  id="badge-master-${i}"   style="display:none">master off</span>
               <span class="badge thermal-sd"  id="badge-thermal-${i}"  style="display:none">🌡 thermal shutdown</span>
+              <span class="badge detached"    id="badge-cooldown-${i}" style="display:none">cooling down</span>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
@@ -580,6 +618,8 @@ function buildCards() {
           <div><div class="mp-item-lbl">Hesit</div><div class="metric-val muted" id="mhesit-${i}">—</div></div>
           <div><div class="mp-item-lbl">Pause</div><div class="metric-val muted" id="mpause-${i}">—</div></div>
           <div><div class="mp-item-lbl">Step</div><div class="metric-val muted"  id="mstep-${i}">—</div></div>
+          <div><div class="mp-item-lbl">Active</div><div class="metric-val muted" id="cdactive-${i}">—</div></div>
+          <div><div class="mp-item-lbl">Rest</div><div class="metric-val muted"   id="cdrest-${i}">—</div></div>
         </div>
 
         <div class="sensor-bars">
@@ -827,10 +867,11 @@ function refreshCard(id) {
   const todayBlackout=isBlackoutToday(u.blackouts), isMasterOff=u.master===false;
 
   document.getElementById(`badge-paused-${id}`).style.display    = (u.paused&&!u.detached&&!isMasterOff&&!isThermal)?'inline-block':'none';
-  document.getElementById(`badge-detached-${id}`).style.display  = (u.detached&&!todayBlackout&&!isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-detached-${id}`).style.display  = (u.detached&&!todayBlackout&&!isMasterOff&&!isThermal&&!u.inCooldown)?'inline-block':'none';
   document.getElementById(`badge-blackout-${id}`).style.display  = (todayBlackout&&!isMasterOff&&!isThermal)?'inline-block':'none';
   document.getElementById(`badge-master-${id}`).style.display    = (isMasterOff&&!isThermal)?'inline-block':'none';
   document.getElementById(`badge-thermal-${id}`).style.display   = isThermal?'inline-block':'none';
+  document.getElementById(`badge-cooldown-${id}`).style.display  = (u.inCooldown&&!isThermal)?'inline-block':'none';
 
   const ntpBadge=document.getElementById(`ntp-badge-${id}`);
   if      (u.ntpSynced===true)  { ntpBadge.className='badge ntp-ok';   ntpBadge.textContent='ntp ok'; }
@@ -842,6 +883,7 @@ function refreshCard(id) {
 
   let stateText='live';
   if (isThermal)         stateText='thermal shutdown';
+  else if (u.inCooldown) stateText='cooling down';
   else if (isMasterOff)  stateText='master off';
   else if (todayBlackout)stateText='blackout day';
   else if (u.detached)   stateText='detached';
@@ -864,6 +906,10 @@ function refreshCard(id) {
     document.getElementById(`mpause-${id}`).textContent=u.mPause+'s';  document.getElementById(`mpause-${id}`).className='metric-val good';
     document.getElementById(`mstep-${id}`).textContent=(u.mStep/10).toFixed(1)+'°'; document.getElementById(`mstep-${id}`).className='metric-val good';
     if (id===controlUnit) updateBoardValues(id);
+  }
+  if (u.cdActive!=null) {
+    document.getElementById(`cdactive-${id}`).textContent=u.cdActive+'m'; document.getElementById(`cdactive-${id}`).className='metric-val good';
+    document.getElementById(`cdrest-${id}`).textContent=u.cdRest+'m';     document.getElementById(`cdrest-${id}`).className='metric-val good';
   }
 
   updateTempBar(id, u.cpuTemp, u.tCutoff, u.tResume);
@@ -1005,15 +1051,19 @@ function doConnect() {
       units[id].mHesit    = d.m_hesit   != null ? d.m_hesit   : null;
       units[id].mPause    = d.m_pause   != null ? d.m_pause   : null;
       units[id].mStep     = d.m_step    != null ? d.m_step    : null;
-      units[id].tCutoff   = d.t_cutoff  != null ? d.t_cutoff  : null;
-      units[id].tResume   = d.t_resume  != null ? d.t_resume  : null;
-      units[id].thermalSd = d.thermal_sd === true;
+      units[id].tCutoff   = d.t_cutoff    != null ? d.t_cutoff    : null;
+      units[id].tResume   = d.t_resume    != null ? d.t_resume    : null;
+      units[id].thermalSd = d.thermal_sd  === true;
+      units[id].cdActive  = d.cd_active   != null ? d.cd_active   : null;
+      units[id].cdRest    = d.cd_rest     != null ? d.cd_rest     : null;
+      units[id].inCooldown= d.in_cooldown === true;
 
       // Always record temp for health log whenever we receive it
       if (d.cpu_temp != null) recordHealthSample(id, d.cpu_temp);
 
       if(d.master!=null&&masterState===null){masterState=d.master;updateMasterUI();}
       if(id===controlUnit&&d.m_speed!=null)syncControlSliders(id);
+      if(id===controlUnit&&d.cd_active!=null)syncControlSliders(id);
 
       if(d.monitoring===false){stopMonitorUI(id);}
       else if(d.monitoring===true){
