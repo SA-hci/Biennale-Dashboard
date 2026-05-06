@@ -344,27 +344,29 @@
     <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Changes apply instantly · Save persists through reboots</span>
   </div>
 
+  <!-- FIX: Slider ranges updated to match firmware limits (38–60°C cutoff, 30–55°C resume) -->
+  <!-- FIX: Default values updated to 50/42 to reflect intended operating range -->
   <div class="control-section-label">Thermal protection</div>
   <div class="params-grid">
     <div class="param-row">
       <div class="param-header">
         <div class="param-label">Shutdown above <span style="color:var(--dimmed);font-size:9px">(°C)</span></div>
-        <div><span class="param-value" id="cutoff-display" style="color:var(--red)">65°C</span><span class="param-board" id="cutoff-board"> · board: —</span></div>
+        <div><span class="param-value" id="cutoff-display" style="color:var(--red)">50°C</span><span class="param-board" id="cutoff-board"> · board: —</span></div>
       </div>
-      <input type="range" class="thermal" id="cutoff-slider" min="40" max="80" value="65" oninput="onParamSlider('cutoff')" onchange="sendParamLive('cutoff')" />
+      <input type="range" class="thermal" id="cutoff-slider" min="38" max="60" value="50" oninput="onParamSlider('cutoff')" onchange="sendParamLive('cutoff')" />
     </div>
     <div class="param-row">
       <div class="param-header">
         <div class="param-label">Resume below <span style="color:var(--dimmed);font-size:9px">(°C)</span></div>
-        <div><span class="param-value" id="resume-display" style="color:var(--amber)">55°C</span><span class="param-board" id="resume-board"> · board: —</span></div>
+        <div><span class="param-value" id="resume-display" style="color:var(--amber)">42°C</span><span class="param-board" id="resume-board"> · board: —</span></div>
       </div>
-      <input type="range" class="thermal" id="resume-slider" min="30" max="75" value="55" oninput="onParamSlider('resume')" onchange="sendParamLive('resume')" />
+      <input type="range" class="thermal" id="resume-slider" min="30" max="55" value="42" oninput="onParamSlider('resume')" onchange="sendParamLive('resume')" />
     </div>
   </div>
   <div class="control-actions">
     <button class="btn-save thermal" onclick="saveThermal()">Save thermal to flash</button>
     <span class="save-flash thermal" id="thermal-saved"></span>
-    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Cutoff must be ≥ Resume + 5°C</span>
+    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Auto-saved on change · Cutoff must be ≥ Resume + 5°C</span>
   </div>
 
   <div class="control-section-label">Cooldown cycle</div>
@@ -663,6 +665,7 @@ function buildCards() {
           <button class="btn b-resume" onclick="sendCmd(${i},'resume')">Resume</button>
           <button class="btn b-detach" onclick="sendCmd(${i},'detach')">Detach</button>
           <button class="btn b-attach" onclick="sendCmd(${i},'attach')">Attach</button>
+          <button class="btn b-danger" onclick="rebootUnit(${i})">Reboot</button>
         </div>
 
         <div class="ctrl-group-label">Go to</div>
@@ -692,19 +695,14 @@ function updateTempBar(id, temp, cutoff, resume) {
   const fillEl = document.getElementById(`temp-fill-${id}`);
   const valEl  = document.getElementById(`temp-val-${id}`);
   const thrEl  = document.getElementById(`temp-thresholds-${id}`);
-
-  // Update threshold hint
-  if (cutoff != null && resume != null) {
-    thrEl.textContent = `resume ${resume}° / shutdown ${cutoff}°`;
-  }
-
+  if (cutoff != null && resume != null) thrEl.textContent = `resume ${resume}° / shutdown ${cutoff}°`;
   if (temp == null) { fillEl.style.width='0%'; valEl.textContent='— °C'; valEl.className='sensor-value muted'; return; }
-  const max = cutoff ? cutoff + 10 : 85;
+  const max = cutoff ? cutoff + 10 : 70;
   fillEl.style.width = Math.min(100, (temp/max)*100).toFixed(1)+'%';
   let cls, color;
-  if      (temp < (resume || 55))  { cls='good'; color='#4ade80'; }
-  else if (temp < (cutoff || 65))  { cls='warn'; color='#fbbf24'; }
-  else                             { cls='bad';  color='#f87171'; }
+  if      (temp < (resume || 42)) { cls='good'; color='#4ade80'; }
+  else if (temp < (cutoff || 50)) { cls='warn'; color='#fbbf24'; }
+  else                            { cls='bad';  color='#f87171'; }
   fillEl.style.background = color;
   valEl.className = 'sensor-value ' + cls;
   valEl.textContent = temp.toFixed(1) + ' °C';
@@ -721,9 +719,7 @@ function updateHeapBar(id, heap) {
   valEl.textContent = (heap/1024).toFixed(0)+' KB';
 }
 
-function clearSensors(id) {
-  updateTempBar(id,null,null,null); updateHeapBar(id,null);
-}
+function clearSensors(id) { updateTempBar(id,null,null,null); updateHeapBar(id,null); }
 
 // ── Monitor control ───────────────────────────────────────────────────────────
 function toggleMonitor(id) {
@@ -827,8 +823,6 @@ function updateLastSeenDisplay(id) {
   const saved = loadLastSeen(id);
   const ts = u.lastSeen || saved.ts;
   document.getElementById(`lastseen-${id}`).textContent = formatLastSeen(ts);
-
-  // Show last known sensor values when not actively monitoring
   if (!u.monitoring) {
     const temp = saved.temp;
     const heap = saved.heap;
@@ -848,8 +842,20 @@ function updateLastSeenDisplay(id) {
 function refreshCard(id) {
   const u=units[id];
 
-  // Always update last seen display regardless of monitoring state
   updateLastSeenDisplay(id);
+
+  // FIX: Always update thermal state on card border and badge, even outside monitoring.
+  // Heartbeats now fire immediately on thermal events, so this ensures the card reflects
+  // thermal shutdown the moment it happens without requiring active monitoring.
+  const cardEl = document.getElementById(`card-${id}`);
+  if (cardEl) {
+    if (u.thermalSd) cardEl.classList.add('thermal-shutdown');
+    else             cardEl.classList.remove('thermal-shutdown');
+  }
+  const thermalBadgeEl = document.getElementById(`badge-thermal-${id}`);
+  if (thermalBadgeEl && !u.monitoring) {
+    thermalBadgeEl.style.display = u.thermalSd ? 'inline-block' : 'none';
+  }
 
   if (!u.monitoring) return;
 
@@ -859,7 +865,7 @@ function refreshCard(id) {
 
   let cardClass='unit-card monitoring-active '+sc;
   if (isThermal) cardClass+=' thermal-shutdown';
-  document.getElementById(`card-${id}`).className=cardClass;
+  cardEl.className=cardClass;
 
   const pill=document.getElementById(`pill-${id}`);
   pill.className='pill live'; pill.textContent='Live';
@@ -898,7 +904,6 @@ function refreshCard(id) {
   document.getElementById(`boardsched-on-${id}`).textContent  = u.schedOn  || '—';
   document.getElementById(`boardsched-off-${id}`).textContent = u.schedOff || '—';
   document.getElementById(`boardblackouts-${id}`).textContent = (u.blackouts&&u.blackouts.length>0)?u.blackouts.join(', '):'none';
-  // last seen is handled by updateLastSeenDisplay() above
 
   if (u.mSpeed!=null) {
     document.getElementById(`mspeed-${id}`).textContent=u.mSpeed+'ms'; document.getElementById(`mspeed-${id}`).className='metric-val good';
@@ -920,7 +925,6 @@ function refreshCard(id) {
 
   if (u.master!=null&&masterState===null) { masterState=u.master; updateMasterUI(); }
 
-  // Log thermal events
   if (isThermal && !units[id]._thermalLogged) { units[id]._thermalLogged=true; addLog(`unit ${id}: thermal shutdown triggered`,'err'); }
   if (!isThermal && units[id]._thermalLogged) { units[id]._thermalLogged=false; addLog(`unit ${id}: thermal protection cleared`,'ok'); }
 }
@@ -945,6 +949,7 @@ function sendLimits(unitId) {
 }
 
 function sendCmdAll(cmd) { for(let i=1;i<=UNIT_COUNT;i++) sendCmd(i,cmd); }
+function rebootUnit(unitId) { if(!confirm(`Reboot unit ${unitId}?`))return; sendCmd(unitId,'reboot'); addLog(`reboot → unit ${unitId}`,'warn'); }
 function rebootAll()    { if(!confirm('Reboot all units?'))return; for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,'reboot'); addLog('reboot → all units','warn'); }
 function resetWifiAll() { if(!confirm('Reset Wi-Fi on all units?'))return; for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,'reset_wifi'); addLog('reset_wifi → all units','err'); }
 
@@ -1027,7 +1032,6 @@ function doConnect() {
     setConnStatus('connected','connected');addLog('broker connected','ok');
     client.subscribe('museum/#',err=>{if(!err)addLog('subscribed to museum/#','ok');});
     if(schedActive){lastSchedState=null;checkSchedule();}
-    // Start background health monitoring
     if (!healthTimer) startHealthMonitoring();
   });
 
@@ -1035,38 +1039,50 @@ function doConnect() {
     try {
       const d=JSON.parse(payload.toString()),id=parseInt(d.unit);
       if(!id||id<1||id>UNIT_COUNT)return;
-      units[id].uptime    = d.uptime_s;
-      units[id].paused    = d.paused;
-      units[id].detached  = d.detached;
-      units[id].rssi      = d.wifi_rssi;
-      units[id].ntpSynced = d.ntp_synced;
-      units[id].boardTime = d.board_time || null;
-      units[id].schedOn   = d.sched_on   || null;
-      units[id].schedOff  = d.sched_off  || null;
-      units[id].blackouts = d.blackouts ? d.blackouts.split(',').filter(x=>x) : [];
-      units[id].master    = d.master    != null ? d.master    : null;
-      units[id].cpuTemp   = d.cpu_temp  != null ? d.cpu_temp  : null;
-      units[id].freeHeap  = d.free_heap != null ? d.free_heap : null;
-      units[id].mSpeed    = d.m_speed   != null ? d.m_speed   : null;
-      units[id].mHesit    = d.m_hesit   != null ? d.m_hesit   : null;
-      units[id].mPause    = d.m_pause   != null ? d.m_pause   : null;
-      units[id].mStep     = d.m_step    != null ? d.m_step    : null;
-      units[id].tCutoff   = d.t_cutoff    != null ? d.t_cutoff    : null;
-      units[id].tResume   = d.t_resume    != null ? d.t_resume    : null;
-      units[id].thermalSd = d.thermal_sd  === true;
-      units[id].cdActive  = d.cd_active   != null ? d.cd_active   : null;
-      units[id].cdRest    = d.cd_rest     != null ? d.cd_rest     : null;
-      units[id].inCooldown= d.in_cooldown === true;
 
-      // Always record temp for health log whenever we receive it
+      // FIX: Core fields present in every message (heartbeat + full status) — always update.
+      units[id].uptime     = d.uptime_s;
+      units[id].paused     = d.paused;
+      units[id].detached   = d.detached;
+      units[id].rssi       = d.wifi_rssi;
+      units[id].ntpSynced  = d.ntp_synced;
+      units[id].master     = d.master    != null ? d.master   : null;
+      units[id].cpuTemp    = d.cpu_temp  != null ? d.cpu_temp : null;
+      units[id].thermalSd  = d.thermal_sd  === true;
+      units[id].inCooldown = d.in_cooldown === true;
+
+      // FIX: Monitoring-only fields — only update when the key is actually present in the
+      // message. Heartbeats don't carry these fields; without this guard, every heartbeat
+      // would reset mSpeed, tCutoff, schedOn, blackouts etc. to null, wiping the control
+      // panel board values and temperature thresholds at exactly the wrong moment
+      // (e.g. immediately after a thermal shutdown triggers an instant heartbeat).
+      if ('board_time' in d) units[id].boardTime = d.board_time || null;
+      if ('sched_on'   in d) units[id].schedOn   = d.sched_on   || null;
+      if ('sched_off'  in d) units[id].schedOff  = d.sched_off  || null;
+      if ('blackouts'  in d) units[id].blackouts  = d.blackouts ? d.blackouts.split(',').filter(x=>x) : [];
+      if ('free_heap'  in d) units[id].freeHeap   = d.free_heap;
+      if ('m_speed'    in d) units[id].mSpeed     = d.m_speed;
+      if ('m_hesit'    in d) units[id].mHesit     = d.m_hesit;
+      if ('m_pause'    in d) units[id].mPause     = d.m_pause;
+      if ('m_step'     in d) units[id].mStep      = d.m_step;
+      if ('t_cutoff'   in d) units[id].tCutoff    = d.t_cutoff;
+      if ('t_resume'   in d) units[id].tResume    = d.t_resume;
+      if ('cd_active'  in d) units[id].cdActive   = d.cd_active;
+      if ('cd_rest'    in d) units[id].cdRest     = d.cd_rest;
+
+      // Always record temperature for health log
       if (d.cpu_temp != null) recordHealthSample(id, d.cpu_temp);
 
       if(d.master!=null&&masterState===null){masterState=d.master;updateMasterUI();}
-      if(id===controlUnit&&d.m_speed!=null)syncControlSliders(id);
-      if(id===controlUnit&&d.cd_active!=null)syncControlSliders(id);
+      if(id===controlUnit&&('m_speed' in d))syncControlSliders(id);
+      if(id===controlUnit&&('cd_active' in d))syncControlSliders(id);
 
-      if(d.monitoring===false){stopMonitorUI(id);}
-      else if(d.monitoring===true){
+      if(d.monitoring===false){
+        stopMonitorUI(id);
+        // FIX: Still call refreshCard so thermal/critical card state updates
+        // even when not actively monitoring (e.g. from a heartbeat after thermal shutdown).
+        refreshCard(id);
+      } else if(d.monitoring===true){
         units[id].angle=d.servo_angle; units[id].minLimit=d.min_limit; units[id].maxLimit=d.max_limit;
         units[id].lastSeen=Date.now();
         saveLastSeen(id, units[id].lastSeen, units[id].cpuTemp, units[id].freeHeap);
@@ -1091,8 +1107,8 @@ function addLog(msg,type='info') {
 }
 
 // ── Health log ────────────────────────────────────────────────────────────────
-const HEALTH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const HEALTH_SAMPLE_WAIT = 4000;           // wait 4s for response after monitor_on
+const HEALTH_INTERVAL_MS = 5 * 60 * 1000;
+const HEALTH_SAMPLE_WAIT = 4000;
 let healthTimer       = null;
 let healthCheckActive = false;
 let healthLastDate    = null;
@@ -1114,10 +1130,9 @@ function recordHealthSample(unitId, temp) {
   if (temp == null) return;
   const log    = loadHealthLog();
   const today  = todayKey();
-  if (!log[today])        log[today] = {};
+  if (!log[today])         log[today] = {};
   if (!log[today][unitId]) log[today][unitId] = [];
   log[today][unitId].push({ t: Date.now(), temp });
-  // Keep only last 2 days
   const keys = Object.keys(log).sort();
   while (keys.length > 2) { delete log[keys.shift()]; keys.shift(); }
   saveHealthLog(log);
@@ -1126,47 +1141,34 @@ function recordHealthSample(unitId, temp) {
 function getHealthStats(readings) {
   if (!readings || !readings.length) return null;
   const temps = readings.map(r => r.temp);
-  return {
-    min:  Math.min(...temps),
-    max:  Math.max(...temps),
-    avg:  temps.reduce((a,b)=>a+b,0) / temps.length,
-    count: temps.length,
-    readings
-  };
+  return { min:Math.min(...temps), max:Math.max(...temps), avg:temps.reduce((a,b)=>a+b,0)/temps.length, count:temps.length, readings };
 }
 
 function tempClass(t) {
   if (t == null) return 'muted';
-  return t < 50 ? 'good' : t < 65 ? 'warn' : 'bad';
+  return t < 50 ? 'good' : t < 60 ? 'warn' : 'bad';
 }
 
 function drawChart(canvasId, readings, cutoff) {
   const container = document.getElementById(canvasId);
   if (!container) return;
-  if (!readings || readings.length < 2) {
-    container.innerHTML = '<div class="health-chart-empty">collecting data…</div>';
-    return;
-  }
+  if (!readings || readings.length < 2) { container.innerHTML = '<div class="health-chart-empty">collecting data…</div>'; return; }
   const w = container.offsetWidth || 300;
   const h = 60;
   const temps  = readings.map(r => r.temp);
   const times  = readings.map(r => r.t);
   const minT   = Math.min(...temps) - 2;
-  const maxT   = Math.max(Math.max(...temps) + 2, (cutoff || 70));
+  const maxT   = Math.max(Math.max(...temps) + 2, (cutoff || 60));
   const tRange = maxT - minT;
   const tMin   = Math.min(...times);
   const tMax   = Math.max(...times);
   const tRange2= tMax - tMin || 1;
-
   const pts = readings.map(r => {
     const x = ((r.t - tMin) / tRange2) * w;
     const y = h - ((r.temp - minT) / tRange) * h;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
-
-  // Cutoff line
   const cutoffY = cutoff ? (h - ((cutoff - minT) / tRange) * h).toFixed(1) : null;
-
   container.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" class="health-chart-line">
       ${cutoffY ? `<line x1="0" y1="${cutoffY}" x2="${w}" y2="${cutoffY}" stroke="rgba(248,113,113,0.3)" stroke-width="1" stroke-dasharray="3,3"/>` : ''}
@@ -1184,18 +1186,15 @@ function renderHealthGrid() {
   const yesterday = keys.filter(k => k !== today).pop() || null;
   const grid   = document.getElementById('health-grid');
   if (!grid) return;
-
   let html = '';
   for (let i = 1; i <= UNIT_COUNT; i++) {
-    const todayStats     = getHealthStats(log[today]?.[i]);
-    const yestStats      = getHealthStats(log[yesterday]?.[i]);
-    const cutoff         = units[i].tCutoff || 65;
-
+    const todayStats = getHealthStats(log[today]?.[i]);
+    const yestStats  = getHealthStats(log[yesterday]?.[i]);
+    const cutoff     = units[i].tCutoff || 50;
     const avg  = todayStats ? todayStats.avg.toFixed(1)  : '—';
     const min  = todayStats ? todayStats.min.toFixed(1)  : '—';
     const max  = todayStats ? todayStats.max.toFixed(1)  : '—';
     const cnt  = todayStats ? todayStats.count           : 0;
-
     html += `
       <div class="health-card">
         <div class="health-card-header">
@@ -1207,53 +1206,39 @@ function renderHealthGrid() {
           <div class="health-stat"><div class="health-stat-lbl">Min</div><div class="health-stat-val ${todayStats?tempClass(todayStats.min):'muted'}">${min}${todayStats?'°':''}</div></div>
           <div class="health-stat"><div class="health-stat-lbl">Max</div><div class="health-stat-val ${todayStats?tempClass(todayStats.max):'muted'}">${max}${todayStats?'°':''}</div></div>
         </div>
-        <div class="health-chart" id="hchart-${i}">
-          <div class="health-chart-empty">no data yet</div>
-        </div>
-        ${yestStats ? `
-        <div class="health-yesterday">
-          <span>Yesterday:</span>
-          avg ${yestStats.avg.toFixed(1)}° &nbsp;
-          min ${yestStats.min.toFixed(1)}° &nbsp;
-          max ${yestStats.max.toFixed(1)}° &nbsp;
-          (${yestStats.count} readings)
-        </div>` : ''}
+        <div class="health-chart" id="hchart-${i}"><div class="health-chart-empty">no data yet</div></div>
+        ${yestStats ? `<div class="health-yesterday"><span>Yesterday:</span> avg ${yestStats.avg.toFixed(1)}° &nbsp; min ${yestStats.min.toFixed(1)}° &nbsp; max ${yestStats.max.toFixed(1)}° &nbsp; (${yestStats.count} readings)</div>` : ''}
       </div>`;
   }
-
   grid.innerHTML = html;
-
-  // Draw charts after DOM update
   for (let i = 1; i <= UNIT_COUNT; i++) {
     const stats  = getHealthStats(log[today]?.[i]);
-    const cutoff = units[i].tCutoff || 65;
+    const cutoff = units[i].tCutoff || 50;
     if (stats) drawChart(`hchart-${i}`, stats.readings, cutoff);
   }
 }
 
 function runHealthCheck() {
-  if (!client || !client.connected) { addLog('health check: not connected','warn'); return; }
+  if (!client || !client.connected) { addLog('health check: not connected','warn'); scheduleNextHealthCheck(); return; }
   if (healthCheckActive) return;
+  const anyMonitoring = Object.values(units).some(u => u.monitoring);
+  if (anyMonitoring) { addLog('health check skipped — monitoring active','info'); scheduleNextHealthCheck(); return; }
+  const anyCooldown = Object.values(units).some(u => u.inCooldown);
+  if (anyCooldown) { addLog('health check skipped — unit in cooldown','info'); scheduleNextHealthCheck(); return; }
+
   healthCheckActive = true;
+  const dot=document.getElementById('health-dot'), status=document.getElementById('health-status');
+  if (dot) dot.className='dot';
+  if (status) status.textContent='checking…';
 
-  const dot    = document.getElementById('health-dot');
-  const status = document.getElementById('health-status');
-  if (dot)    dot.className    = 'dot';
-  if (status) status.textContent = 'checking…';
-
-  // Send monitor_on to all units — board will reply with temp in payload
   for (let i = 1; i <= UNIT_COUNT; i++) {
     if (client && client.connected) client.publish(`museum/unit${i}/cmd`, 'monitor_on');
   }
 
-  // Wait for responses then stop monitoring
   setTimeout(() => {
     for (let i = 1; i <= UNIT_COUNT; i++) {
       if (client && client.connected) client.publish(`museum/unit${i}/cmd`, 'monitor_off');
-      // Record whatever temp we got during this window
-      if (units[i].cpuTemp != null) {
-        recordHealthSample(i, units[i].cpuTemp);
-      }
+      if (units[i].cpuTemp != null) recordHealthSample(i, units[i].cpuTemp);
     }
     healthCheckActive = false;
     if (dot)    { dot.className = 'dot idle'; }
@@ -1265,23 +1250,15 @@ function runHealthCheck() {
 
 function scheduleNextHealthCheck() {
   if (healthTimer) clearTimeout(healthTimer);
-  healthTimer = setTimeout(() => {
-    checkAndResetHealthLog();
-    runHealthCheck();
-  }, HEALTH_INTERVAL_MS);
-
+  healthTimer = setTimeout(() => { checkAndResetHealthLog(); runHealthCheck(); }, HEALTH_INTERVAL_MS);
   const next = new Date(Date.now() + HEALTH_INTERVAL_MS);
   const el   = document.getElementById('health-next');
   if (el) el.textContent = `next check at ${next.toTimeString().slice(0,5)}`;
 }
 
 function checkAndResetHealthLog() {
-  // If the day has changed since last check, the new key will be different — no action needed
-  // localStorage naturally separates by date key
   const today = todayKey();
-  if (healthLastDate && healthLastDate !== today) {
-    addLog(`health log: new day started (${today})`, 'info');
-  }
+  if (healthLastDate && healthLastDate !== today) addLog(`health log: new day started (${today})`, 'info');
   healthLastDate = today;
 }
 
@@ -1304,14 +1281,10 @@ function tick(){
   for (let i = 1; i <= UNIT_COUNT; i++) updateLastSeenDisplay(i);
 }
 
-// Load persisted last seen on startup and show on cards
 function initLastSeen() {
   for (let i = 1; i <= UNIT_COUNT; i++) {
     const saved = loadLastSeen(i);
-    if (saved.ts) {
-      units[i].lastSeen = null; // don't override with stale in-memory value
-      updateLastSeenDisplay(i);
-    }
+    if (saved.ts) { units[i].lastSeen = null; updateLastSeenDisplay(i); }
   }
 }
 
