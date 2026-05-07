@@ -294,6 +294,12 @@
   <div class="monitor-all-label">Monitor</div>
   <button class="btn-action" onclick="monitorAll()">All units on</button>
   <button class="btn-action stop" onclick="stopAll()">All units off</button>
+  <button class="toggle-btn" id="auto-mon-btn" onclick="toggleAutoMonitor()">Auto-Monitor</button>
+  <span id="auto-mon-status" style="font-family:var(--mono);font-size:10px;color:var(--dimmed)"></span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed)">Auto-reboot silent units:</span>
+    <button class="toggle-btn" id="auto-reboot-btn" onclick="toggleAutoReboot()">Off</button>
+  </div>
 </div>
 
 <!-- Combined motion + thermal control panel -->
@@ -763,6 +769,50 @@ function stopMonitorUI(id) {
 function monitorAll() { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_on');startMonitorUI(i);}addLog('monitor on → all units','ok'); }
 function stopAll()    { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_off');stopMonitorUI(i);}addLog('monitor off → all units','warn'); }
 
+// ── Auto-Monitor — re-sends monitor_on every 90 s so the firmware's 2-min window never expires ──
+let autoMonitorActive=false, autoMonitorTimer=null;
+let autoRebootActive=false;
+const AUTO_MON_INTERVAL=90000;   // 90 seconds — firmware window is 120 s
+const AUTO_REBOOT_SILENCE=300000; // 5 minutes silence before auto-reboot
+
+function toggleAutoMonitor() {
+  autoMonitorActive=!autoMonitorActive;
+  const btn=document.getElementById('auto-mon-btn'), st=document.getElementById('auto-mon-status');
+  if(autoMonitorActive){
+    btn.classList.add('on'); btn.textContent='Auto-Monitor: ON'; st.textContent='— refreshes every 90 s';
+    sendCmdAll('monitor_on'); for(let i=1;i<=UNIT_COUNT;i++) startMonitorUI(i);
+    autoMonitorTimer=setInterval(()=>{
+      sendCmdAll('monitor_on'); for(let i=1;i<=UNIT_COUNT;i++) startMonitorUI(i);
+      checkSilentUnits(); addLog('auto: monitor_on → all','info');
+    }, AUTO_MON_INTERVAL);
+    addLog('auto-monitor enabled — 90 s refresh','ok');
+  } else {
+    clearInterval(autoMonitorTimer); autoMonitorTimer=null;
+    btn.classList.remove('on'); btn.textContent='Auto-Monitor'; st.textContent='';
+    addLog('auto-monitor disabled','warn');
+  }
+}
+
+function toggleAutoReboot() {
+  autoRebootActive=!autoRebootActive;
+  const btn=document.getElementById('auto-reboot-btn');
+  btn.textContent=autoRebootActive?'On — 5 min':'Off';
+  btn.classList.toggle('on',autoRebootActive);
+  addLog('auto-reboot '+(autoRebootActive?'enabled (5 min silence)':'disabled'),autoRebootActive?'warn':'info');
+}
+
+function checkSilentUnits() {
+  const now=Date.now();
+  for(let i=1;i<=UNIT_COUNT;i++){
+    if(!units[i].lastSeen) continue;
+    const age=now-units[i].lastSeen;
+    if(age>AUTO_REBOOT_SILENCE){
+      addLog(`unit ${i}: silent ${Math.round(age/60000)} min`+(autoRebootActive?' → rebooting':''),'err');
+      if(autoRebootActive){ sendCmd(i,'reboot'); units[i].lastSeen=now; }
+    }
+  }
+}
+
 // ── Arc + range bar ───────────────────────────────────────────────────────────
 function updateArc(id,angle) {
   const ratio=Math.max(0,Math.min(1,angle/180));
@@ -1077,18 +1127,15 @@ function doConnect() {
       if(id===controlUnit&&('m_speed' in d))syncControlSliders(id);
       if(id===controlUnit&&('cd_active' in d))syncControlSliders(id);
 
-      if(d.monitoring===false){
-        stopMonitorUI(id);
-        // FIX: Still call refreshCard so thermal/critical card state updates
-        // even when not actively monitoring (e.g. from a heartbeat after thermal shutdown).
-        refreshCard(id);
-      } else if(d.monitoring===true){
-        units[id].angle=d.servo_angle; units[id].minLimit=d.min_limit; units[id].maxLimit=d.max_limit;
-        units[id].lastSeen=Date.now();
-        saveLastSeen(id, units[id].lastSeen, units[id].cpuTemp, units[id].freeHeap);
-        if(!units[id].monitoring)startMonitorUI(id);
-        refreshCard(id);
-      }
+      // Always update position data when present — works for both status and heartbeat messages
+      if('servo_angle' in d){ units[id].angle=d.servo_angle; units[id].minLimit=d.min_limit; units[id].maxLimit=d.max_limit; }
+      units[id].lastSeen=Date.now();
+      saveLastSeen(id, units[id].lastSeen, units[id].cpuTemp, units[id].freeHeap);
+      // NEVER call stopMonitorUI from an incoming message. The old firmware heartbeat always
+      // sends monitoring:false even during an active session — calling stopMonitorUI here clears
+      // the card mid-session. Only the countdown timer is allowed to stop monitoring.
+      if(d.monitoring===true && !units[id].monitoring) startMonitorUI(id);
+      refreshCard(id);
     }catch(e){}
   });
 
