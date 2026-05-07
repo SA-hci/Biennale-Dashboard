@@ -781,10 +781,21 @@ function toggleAutoMonitor() {
   const btn=document.getElementById('auto-mon-btn'), st=document.getElementById('auto-mon-status');
   if(autoMonitorActive){
     btn.classList.add('on'); btn.textContent='Auto-Monitor: ON'; st.textContent='— refreshes every 90 s';
-    sendCmdAll('monitor_on'); for(let i=1;i<=UNIT_COUNT;i++) startMonitorUI(i);
+    for(let i=1;i<=UNIT_COUNT;i++){ if(!units[i].detached&&!units[i].inCooldown){ sendCmd(i,'monitor_on'); startMonitorUI(i); } }
     autoMonitorTimer=setInterval(()=>{
-      sendCmdAll('monitor_on'); for(let i=1;i<=UNIT_COUNT;i++) startMonitorUI(i);
-      checkSilentUnits(); addLog('auto: monitor_on → all','info');
+      // Only refresh monitoring for units that are actually running (not detached).
+      // Detached units are kept in quiet heartbeat mode (5-min interval) to prevent
+      // continuous TLS publishing from raising ESP32 CPU temperature unnecessarily.
+      let activeCount=0;
+      for(let i=1;i<=UNIT_COUNT;i++){
+        if(units[i].detached||units[i].inCooldown){
+          // Unit is at rest — let the heartbeat timer handle presence; don't force monitoring
+          continue;
+        }
+        sendCmd(i,'monitor_on'); startMonitorUI(i); activeCount++;
+      }
+      checkSilentUnits();
+      addLog(`auto: monitor_on → ${activeCount} active unit(s)`,'info');
     }, AUTO_MON_INTERVAL);
     addLog('auto-monitor enabled — 90 s refresh','ok');
   } else {
