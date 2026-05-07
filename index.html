@@ -1153,7 +1153,19 @@ function doConnect() {
       // Solution: only overwrite when the field is actually present in this message, so the
       // last known state is preserved through heartbeat-only windows.
       if('paused'    in d) units[id].paused    = d.paused    === true;
-      if('detached'  in d) units[id].detached  = d.detached  === true;
+      if('detached'  in d){
+        const wasDetached = units[id].detached;
+        units[id].detached = d.detached === true;
+        // FIRMWARE BUG WORKAROUND (sketch_may06a line 816 vs 827):
+        // publishStatus() runs before the isDetached guard, so the unit keeps publishing
+        // every 5 s during any active monitoring window even when physically detached.
+        // Fix: the moment we see detached:true arrive, send monitor_off immediately to
+        // terminate the current window — don't wait for it to expire on its own (up to 2 min).
+        if(!wasDetached && units[id].detached && units[id].monitoring){
+          sendCmd(id,'monitor_off');
+          addLog(`unit ${id}: detached — sent monitor_off to stop 5 s publishing`,'info');
+        }
+      }
       if('thermal_sd'in d) units[id].thermalSd = d.thermal_sd=== true;
 
       // ── Cooldown-end detection: inCooldown was true, now false ───────────────
