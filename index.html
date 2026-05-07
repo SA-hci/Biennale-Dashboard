@@ -1138,24 +1138,35 @@ function doConnect() {
         setTimeout(()=>{ sendCmd(id,'resume');  addLog(`unit ${id}: post-reboot resume sent`,'info'); },8000);
       }
 
-      units[id].uptime     = d.uptime_s;
-      units[id].paused     = d.paused;
-      units[id].detached   = d.detached;
-      units[id].rssi       = d.wifi_rssi;
-      units[id].ntpSynced  = d.ntp_synced;
-      units[id].master     = d.master    != null ? d.master   : null;
-      units[id].cpuTemp    = d.cpu_temp  != null ? d.cpu_temp : null;
-      units[id].thermalSd  = d.thermal_sd  === true;
+      // uptime, rssi, cpu_temp are present in every message (heartbeat + status) — always overwrite.
+      units[id].uptime    = d.uptime_s;
+      units[id].rssi      = d.wifi_rssi;
+      units[id].ntpSynced = d.ntp_synced;
+      units[id].master    = d.master   != null ? d.master   : null;
+      units[id].cpuTemp   = d.cpu_temp != null ? d.cpu_temp : null;
+
+      // paused / detached / thermalSd / inCooldown: OLD firmware heartbeat does NOT include
+      // these fields — they only appear in full publishStatus() messages (monitoring active).
+      // Using unconditional assignment would reset them to undefined/false on every 5-minute
+      // heartbeat, causing the dashboard to think units are always non-detached and
+      // re-enabling monitoring (and high-frequency TLS publishing) even for idle units.
+      // Solution: only overwrite when the field is actually present in this message, so the
+      // last known state is preserved through heartbeat-only windows.
+      if('paused'    in d) units[id].paused    = d.paused    === true;
+      if('detached'  in d) units[id].detached  = d.detached  === true;
+      if('thermal_sd'in d) units[id].thermalSd = d.thermal_sd=== true;
 
       // ── Cooldown-end detection: inCooldown was true, now false ───────────────
-      const prevCooldown = units[id].inCooldown;
-      const nowCooldown  = d.in_cooldown === true;
-      if(prevCooldown && !nowCooldown){
-        addLog(`unit ${id}: cooldown ended — auto-resuming in 3 s`,'info');
-        setTimeout(()=>{ sendCmd(id,'attach');  addLog(`unit ${id}: post-cooldown attach sent`,'info'); },3000);
-        setTimeout(()=>{ sendCmd(id,'resume');  addLog(`unit ${id}: post-cooldown resume sent`,'info'); },5000);
+      // Wrapped in the same guard so it only fires when in_cooldown is actually reported.
+      if('in_cooldown' in d){
+        const nowCooldown = d.in_cooldown === true;
+        if(units[id].inCooldown && !nowCooldown){
+          addLog(`unit ${id}: cooldown ended — auto-resuming in 3 s`,'info');
+          setTimeout(()=>{ sendCmd(id,'attach');  addLog(`unit ${id}: post-cooldown attach sent`,'info'); },3000);
+          setTimeout(()=>{ sendCmd(id,'resume');  addLog(`unit ${id}: post-cooldown resume sent`,'info'); },5000);
+        }
+        units[id].inCooldown = nowCooldown;
       }
-      units[id].inCooldown = nowCooldown;
 
       // FIX: Monitoring-only fields — only update when the key is actually present in the
       // message. Heartbeats don't carry these fields; without this guard, every heartbeat
