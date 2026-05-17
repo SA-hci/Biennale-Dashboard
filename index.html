@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Installation Monitor</title>
+<title>Installation Monitor — v3</title>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -19,98 +19,140 @@
     --accent:#c8b8f8; --accent-dim:rgba(200,184,248,0.10); --accent2:rgba(200,184,248,0.18);
     --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
   }
-  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-weight:300; min-height:100vh; padding:2rem 1.5rem 4rem; max-width:1080px; margin:0 auto; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-weight:300;
+         min-height:100vh; padding:2rem 1.5rem 4rem; max-width:1280px; margin:0 auto; }
 
-  header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.75rem; padding-bottom:1.5rem; border-bottom:0.5px solid var(--border); gap:2rem; flex-wrap:wrap; }
-  .header-left h1 { font-family:var(--mono); font-size:12px; font-weight:400; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin-bottom:5px; }
+  /* ── Header ── */
+  header { display:flex; align-items:flex-start; justify-content:space-between;
+           margin-bottom:1.75rem; padding-bottom:1.5rem; border-bottom:0.5px solid var(--border);
+           gap:2rem; flex-wrap:wrap; }
+  .header-left h1 { font-family:var(--mono); font-size:12px; font-weight:400;
+                    letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin-bottom:5px; }
   .header-left p  { font-size:11px; color:var(--dimmed); font-family:var(--mono); }
-  .broker-config { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-  .broker-config input { background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 10px; width:295px; outline:none; }
+  .broker-config  { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .broker-config input { background:var(--surface2); border:0.5px solid var(--border2);
+    border-radius:6px; color:var(--text); font-family:var(--mono); font-size:11px;
+    padding:6px 10px; width:295px; outline:none; }
   .broker-config input:focus { border-color:var(--accent); }
   .broker-config input::placeholder { color:var(--dimmed); }
   .broker-row { display:flex; gap:6px; align-items:center; }
-  .connect-btn { background:var(--accent-dim); border:0.5px solid var(--accent); border-radius:6px; color:var(--accent); font-family:var(--mono); font-size:11px; padding:6px 16px; cursor:pointer; white-space:nowrap; transition:background 0.15s; }
+  .connect-btn { background:var(--accent-dim); border:0.5px solid var(--accent); border-radius:6px;
+    color:var(--accent); font-family:var(--mono); font-size:11px; padding:6px 16px;
+    cursor:pointer; white-space:nowrap; transition:background 0.15s; }
   .connect-btn:hover { background:var(--accent2); }
-  .conn-status { font-family:var(--mono); font-size:10px; display:flex; align-items:center; gap:5px; white-space:nowrap; }
+  .conn-status { font-family:var(--mono); font-size:10px; display:flex; align-items:center; gap:5px; }
   .conn-dot { width:6px; height:6px; border-radius:50%; background:var(--dimmed); flex-shrink:0; }
   .conn-dot.connecting { background:var(--amber); animation:blink 1s infinite; }
   .conn-dot.connected  { background:var(--green); }
   .conn-dot.error      { background:var(--red); }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.25} }
 
-  .master-bar { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
-  .master-label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); }
-  .master-on-btn  { font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.08em; padding:7px 20px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--green-dim); border:0.5px solid var(--green); color:var(--green); }
+  /* ── Top bars ── */
+  .top-bar { background:var(--surface); border:0.5px solid var(--border); border-radius:12px;
+             padding:0.85rem 1.25rem; margin-bottom:0.75rem; display:flex;
+             align-items:center; gap:0.75rem; flex-wrap:wrap; }
+  .bar-label { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+               letter-spacing:0.1em; color:var(--dimmed); flex-shrink:0; min-width:72px; }
+  .master-on-btn  { font-family:var(--mono); font-size:11px; text-transform:uppercase;
+    letter-spacing:0.08em; padding:7px 20px; border-radius:6px; cursor:pointer;
+    transition:all 0.15s; white-space:nowrap;
+    background:var(--green-dim); border:0.5px solid var(--green); color:var(--green); }
   .master-on-btn:hover { background:rgba(74,222,128,0.2); }
   .master-on-btn.inactive { background:var(--surface2); border-color:var(--border2); color:var(--dimmed); }
-  .master-off-btn { font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.08em; padding:7px 20px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--dimmed); }
-  .master-off-btn:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
+  .master-off-btn { font-family:var(--mono); font-size:11px; text-transform:uppercase;
+    letter-spacing:0.08em; padding:7px 20px; border-radius:6px; cursor:pointer;
+    transition:all 0.15s; white-space:nowrap;
+    background:var(--surface2); border:0.5px solid var(--border2); color:var(--dimmed); }
+  .master-off-btn:hover  { background:var(--red-dim); border-color:var(--red); color:var(--red); }
   .master-off-btn.active { background:var(--red-dim); border-color:var(--red); color:var(--red); }
-  .master-status { font-family:var(--mono); font-size:11px; margin-left:8px; }
+  .master-status { font-family:var(--mono); font-size:11px; margin-left:4px; }
   .master-status.on  { color:var(--green); }
   .master-status.off { color:var(--red); }
+  .btn-action { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.07em; padding:6px 14px; border-radius:6px; cursor:pointer;
+    transition:all 0.15s; white-space:nowrap;
+    background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .btn-action:hover       { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+  .btn-action.stop:hover  { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
+  .btn-action.danger:hover{ background:var(--red-dim); border-color:var(--red); color:var(--red); }
 
-  .panel { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; }
-  .panel-title { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); margin-bottom:0.85rem; }
+  /* ── Panels ── */
+  .panel { background:var(--surface); border:0.5px solid var(--border); border-radius:12px;
+           padding:1rem 1.25rem; margin-bottom:0.75rem; }
+  .panel-title { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+                 letter-spacing:0.1em; color:var(--dimmed); margin-bottom:0.85rem; }
   .panel-row { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
-  .panel-row + .panel-row { margin-top:0.65rem; }
+  .panel-row+.panel-row { margin-top:0.65rem; }
   .panel-row-label { font-family:var(--mono); font-size:10px; color:var(--muted); min-width:90px; flex-shrink:0; }
-  input[type="time"] { background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 10px; width:112px; outline:none; color-scheme:dark; }
-  input[type="time"]:focus { border-color:var(--accent); }
-  input[type="date"] { background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 10px; outline:none; color-scheme:dark; width:150px; }
-  input[type="date"]:focus { border-color:var(--accent); }
+  input[type="time"],input[type="date"] { background:var(--surface2); border:0.5px solid var(--border2);
+    border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px;
+    padding:5px 10px; outline:none; color-scheme:dark; }
+  input[type="time"] { width:112px; }
+  input[type="date"] { width:150px; }
+  input[type="time"]:focus,input[type="date"]:focus { border-color:var(--accent); }
   .sep { font-family:var(--mono); font-size:11px; color:var(--dimmed); }
-  .num-input { width:64px; background:var(--surface2); border:0.5px solid var(--border2); border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; text-align:center; }
+  .num-input { width:64px; background:var(--surface2); border:0.5px solid var(--border2);
+    border-radius:6px; color:var(--text); font-family:var(--mono); font-size:12px;
+    padding:5px 8px; outline:none; text-align:center; }
   .num-input:focus { border-color:var(--accent); }
-  .btn-set { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; padding:5px 14px; border-radius:6px; cursor:pointer; background:var(--accent-dim); border:0.5px solid var(--accent); color:var(--accent); transition:background 0.12s; white-space:nowrap; }
+  .btn-set { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.06em; padding:5px 14px; border-radius:6px; cursor:pointer;
+    background:var(--accent-dim); border:0.5px solid var(--accent); color:var(--accent);
+    transition:background 0.12s; white-space:nowrap; }
   .btn-set:hover { background:var(--accent2); }
-  .toggle-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:5px 14px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
-  .toggle-btn:hover { background:var(--surface3); color:var(--text); }
+  .toggle-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.08em; padding:5px 14px; border-radius:6px; cursor:pointer;
+    transition:all 0.15s; white-space:nowrap;
+    background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
   .toggle-btn.on { background:var(--green-dim); border-color:var(--green); color:var(--green); }
   .status-text { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
   .status-text.active { color:var(--green); }
-  .confirm-flash { font-family:var(--mono); font-size:10px; }
   .blackout-tags { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; min-height:24px; }
-  .blackout-tag { display:flex; align-items:center; gap:5px; background:var(--amber-dim); border:0.5px solid rgba(251,191,36,0.3); border-radius:5px; padding:3px 8px 3px 10px; font-family:var(--mono); font-size:10px; color:var(--amber); }
+  .blackout-tag { display:flex; align-items:center; gap:5px; background:var(--amber-dim);
+    border:0.5px solid rgba(251,191,36,0.3); border-radius:5px; padding:3px 8px 3px 10px;
+    font-family:var(--mono); font-size:10px; color:var(--amber); }
   .blackout-tag button { background:none; border:none; color:var(--amber); cursor:pointer; font-size:13px; line-height:1; padding:0; opacity:0.6; }
   .blackout-tag button:hover { opacity:1; }
   .blackout-tags-empty { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .confirm-flash { font-family:var(--mono); font-size:10px; }
 
-  .monitor-all-bar { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:0.85rem 1.25rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; }
-  .monitor-all-label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); flex-shrink:0; }
-  .btn-action { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.07em; padding:6px 14px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
-  .btn-action:hover { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
-  .btn-action.stop:hover   { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
-  .btn-action.danger:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
-
-  /* ── Control panel (motion + thermal) ── */
-  .control-panel { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; }
-  .control-panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem; }
-  .control-panel-title  { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); }
+  /* ── Control panel ── */
+  .control-panel { background:var(--surface); border:0.5px solid var(--border); border-radius:12px;
+                   padding:1rem 1.25rem; margin-bottom:0.75rem; }
+  .control-panel-header { display:flex; align-items:center; justify-content:space-between;
+                          margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem; }
+  .control-panel-title { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+                         letter-spacing:0.1em; color:var(--dimmed); }
   .unit-tabs { display:flex; gap:4px; }
-  .unit-tab { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:4px 12px; border-radius:5px; cursor:pointer; transition:all 0.12s; background:var(--surface2); border:0.5px solid var(--border2); color:var(--dimmed); }
+  .unit-tab { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.08em; padding:4px 12px; border-radius:5px; cursor:pointer;
+    transition:all 0.12s; background:var(--surface2); border:0.5px solid var(--border2); color:var(--dimmed); }
   .unit-tab:hover { color:var(--muted); }
   .unit-tab.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
-
-  .control-section-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); margin-bottom:0.75rem; padding-bottom:6px; border-bottom:0.5px solid var(--border); }
-  .control-section-label + .control-section-label, .control-actions + .control-section-label { margin-top:1rem; }
-
+  .control-section-label { font-family:var(--mono); font-size:9px; text-transform:uppercase;
+    letter-spacing:0.12em; color:var(--dimmed); margin-bottom:0.75rem;
+    padding-bottom:6px; border-bottom:0.5px solid var(--border); }
+  .control-section-label+.control-section-label,.control-actions+.control-section-label { margin-top:1rem; }
   .params-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
   .param-row { display:flex; flex-direction:column; gap:6px; }
   .param-header { display:flex; justify-content:space-between; align-items:center; }
   .param-label { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
   .param-value { font-family:var(--mono); font-size:11px; color:var(--accent); font-weight:500; }
   .param-board { font-family:var(--mono); font-size:9px; color:var(--dimmed); }
-
-  input[type="range"] { -webkit-appearance:none; appearance:none; width:100%; height:3px; background:var(--surface3); border-radius:2px; outline:none; cursor:pointer; }
-  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 2px rgba(200,184,248,0.2); }
-  input[type="range"]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--accent); cursor:pointer; border:none; }
+  input[type="range"] { -webkit-appearance:none; appearance:none; width:100%; height:3px;
+    background:var(--surface3); border-radius:2px; outline:none; cursor:pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px;
+    height:14px; border-radius:50%; background:var(--accent); cursor:pointer;
+    box-shadow:0 0 0 2px rgba(200,184,248,0.2); }
+  input[type="range"]::-moz-range-thumb { width:14px; height:14px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:none; }
   input[type="range"].thermal::-webkit-slider-thumb { background:var(--red); box-shadow:0 0 0 2px rgba(248,113,113,0.2); }
   input[type="range"].thermal::-moz-range-thumb { background:var(--red); }
   input[type="range"].thermal { background:rgba(248,113,113,0.15); }
-
   .control-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:0; }
-  .btn-save { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; padding:6px 18px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .btn-save { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.08em; padding:6px 18px; border-radius:6px; cursor:pointer;
+    transition:all 0.15s; white-space:nowrap; }
   .btn-save.motion  { background:var(--green-dim); border:0.5px solid var(--green); color:var(--green); }
   .btn-save.motion:hover  { background:rgba(74,222,128,0.2); }
   .btn-save.thermal { background:var(--red-dim); border:0.5px solid var(--red); color:var(--red); }
@@ -119,19 +161,22 @@
   .save-flash.motion  { color:var(--green); }
   .save-flash.thermal { color:var(--red); }
 
-  /* ── Units grid ── */
-  .units-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; }
-  .unit-card { background:var(--surface); border:0.5px solid var(--border); border-radius:14px; padding:1.25rem; transition:border-color 0.4s; }
-  .unit-card.online            { border-color:rgba(74,222,128,0.22); }
-  .unit-card.stale             { border-color:rgba(251,191,36,0.22); }
-  .unit-card.offline           { border-color:rgba(248,113,113,0.18); }
-  .unit-card.monitoring-active { border-color:rgba(200,184,248,0.4); }
-  .unit-card.thermal-shutdown  { border-color:rgba(248,113,113,0.6) !important; animation:thermal-pulse 2s infinite; }
-  @keyframes thermal-pulse { 0%,100%{border-color:rgba(248,113,113,0.6)} 50%{border-color:rgba(248,113,113,0.2)} }
+  /* ── Units grid — 2×2 on wide, 1-col on narrow ── */
+  .units-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:0.85rem; }
+  @media(max-width:720px){ .units-grid { grid-template-columns:1fr; } }
 
-  .card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1rem; }
+  .unit-card { background:var(--surface); border:0.5px solid var(--border); border-radius:14px;
+               padding:1.1rem; transition:border-color 0.4s; }
+  .unit-card.online             { border-color:rgba(74,222,128,0.22); }
+  .unit-card.stale              { border-color:rgba(251,191,36,0.22); }
+  .unit-card.offline            { border-color:rgba(248,113,113,0.18); }
+  .unit-card.fast-publish       { border-color:rgba(200,184,248,0.4); }
+  .unit-card.thermal-shutdown   { border-color:rgba(248,113,113,0.6)!important; animation:thermal-pulse 2s infinite; }
+  @keyframes thermal-pulse { 0%,100%{border-color:rgba(248,113,113,0.6)}50%{border-color:rgba(248,113,113,0.2)} }
+
+  .card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:0.85rem; }
   .unit-id-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--dimmed); margin-bottom:3px; }
-  .unit-id-num   { font-family:var(--mono); font-size:22px; font-weight:500; color:var(--text); line-height:1; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .unit-id-num   { font-family:var(--mono); font-size:20px; font-weight:500; color:var(--text); line-height:1; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .pill { font-family:var(--mono); font-size:10px; letter-spacing:0.07em; padding:3px 10px; border-radius:20px; text-transform:uppercase; }
   .pill.online  { background:var(--green-dim);  color:var(--green); }
   .pill.stale   { background:var(--amber-dim);  color:var(--amber); }
@@ -147,128 +192,132 @@
   .badge.master-off   { color:var(--red);   background:var(--red-dim); }
   .badge.thermal-sd   { color:var(--red);   background:var(--red-dim); animation:blink 1s infinite; }
 
-  .monitor-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.85rem; }
-  .monitor-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.07em; padding:5px 14px; border-radius:6px; cursor:pointer; transition:all 0.15s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .monitor-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; }
+  .monitor-btn { font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.07em; padding:5px 14px; border-radius:6px; cursor:pointer;
+    transition:all 0.15s; white-space:nowrap;
+    background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
   .monitor-btn:hover  { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
   .monitor-btn.active { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
-  .monitor-countdown  { font-family:var(--mono); font-size:10px; color:var(--accent); min-height:14px; }
+  .pub-rate { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .pub-rate.fast { color:var(--accent); }
 
-  .pos-row { display:flex; align-items:center; gap:14px; margin-bottom:1rem; }
-  .servo-angle-big { font-family:var(--mono); font-size:36px; font-weight:500; line-height:1; color:var(--text); transition:opacity 0.3s; }
-  .servo-deg-sm    { font-family:var(--mono); font-size:14px; color:var(--muted); }
-  .servo-sub       { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:4px; }
+  .pos-row { display:flex; align-items:center; gap:12px; margin-bottom:0.85rem; }
+  .servo-angle-big { font-family:var(--mono); font-size:32px; font-weight:500; line-height:1; color:var(--text); transition:opacity 0.3s; }
+  .servo-deg-sm    { font-family:var(--mono); font-size:13px; color:var(--muted); }
+  .servo-sub       { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:3px; }
 
-  .range-wrap   { margin-bottom:1rem; }
+  .range-wrap   { margin-bottom:0.85rem; }
   .range-labels { display:flex; justify-content:space-between; margin-bottom:5px; }
   .range-lbl    { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
   .range-lbl span { color:var(--muted); }
   .range-track { height:4px; background:var(--surface3); border-radius:2px; position:relative; }
-  .range-fill  { position:absolute; height:100%; background:var(--accent); opacity:0.3; border-radius:2px; transition:left 0.3s, width 0.3s; }
-  .range-thumb { position:absolute; width:9px; height:9px; border-radius:50%; background:var(--accent); top:-2.5px; transform:translateX(-50%); transition:left 0.4s; box-shadow:0 0 0 2px rgba(200,184,248,0.2); }
+  .range-fill  { position:absolute; height:100%; background:var(--accent); opacity:0.3; border-radius:2px; transition:left 0.3s,width 0.3s; }
+  .range-thumb { position:absolute; width:9px; height:9px; border-radius:50%; background:var(--accent);
+                 top:-2.5px; transform:translateX(-50%); transition:left 0.4s;
+                 box-shadow:0 0 0 2px rgba(200,184,248,0.2); }
 
-  .motion-params-row { background:var(--surface2); border-radius:8px; padding:9px 12px; margin-bottom:1rem; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+  .motion-params-row { background:var(--surface2); border-radius:8px; padding:8px 10px;
+                       margin-bottom:0.85rem; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
   .mp-item-lbl { font-family:var(--mono); font-size:9px; color:var(--dimmed); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px; }
 
-  .sensor-bars { display:flex; flex-direction:column; gap:8px; margin-bottom:1rem; }
-  .sensor-row { display:flex; flex-direction:column; gap:4px; }
-  .sensor-header { display:flex; justify-content:space-between; align-items:center; }
-  .sensor-label { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
-  .sensor-value { font-family:var(--mono); font-size:11px; font-weight:500; }
+  .sensor-bars { display:flex; flex-direction:column; gap:7px; margin-bottom:0.85rem; }
+  .sensor-row  { display:flex; flex-direction:column; gap:4px; }
+  .sensor-header  { display:flex; justify-content:space-between; align-items:center; }
+  .sensor-label   { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
+  .sensor-value   { font-family:var(--mono); font-size:11px; font-weight:500; }
   .sensor-value.good  { color:var(--green); }
   .sensor-value.warn  { color:var(--amber); }
   .sensor-value.bad   { color:var(--red); }
   .sensor-value.muted { color:var(--dimmed); }
   .sensor-track { height:3px; background:var(--surface3); border-radius:2px; overflow:hidden; }
-  .sensor-fill  { height:100%; border-radius:2px; transition:width 0.5s, background 0.5s; }
+  .sensor-fill  { height:100%; border-radius:2px; transition:width 0.5s,background 0.5s; }
 
-  .metrics-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:1rem; }
-  .metric      { background:var(--surface2); border-radius:8px; padding:9px 12px; }
-  .metric-lbl  { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:var(--dimmed); margin-bottom:4px; }
-  .metric-val  { font-family:var(--mono); font-size:13px; color:var(--text); }
+  .metrics-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:0.85rem; }
+  .metric      { background:var(--surface2); border-radius:8px; padding:7px 10px; }
+  .metric-lbl  { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.08em; color:var(--dimmed); margin-bottom:3px; }
+  .metric-val  { font-family:var(--mono); font-size:12px; color:var(--text); }
   .metric-val.good  { color:var(--green); }
   .metric-val.warn  { color:var(--amber); }
   .metric-val.bad   { color:var(--red); }
   .metric-val.muted { color:var(--dimmed); }
 
-  .board-sched-row { display:flex; align-items:center; gap:8px; background:var(--surface2); border-radius:8px; padding:8px 12px; margin-bottom:1rem; font-family:var(--mono); font-size:10px; color:var(--dimmed); flex-wrap:wrap; }
-  .board-sched-row span { color:var(--muted); }
+  .board-sched-row { display:flex; align-items:center; gap:7px; background:var(--surface2);
+    border-radius:8px; padding:7px 10px; margin-bottom:0.85rem;
+    font-family:var(--mono); font-size:10px; color:var(--dimmed); flex-wrap:wrap; }
   .board-sched-row .val { color:var(--accent); }
+  .board-sched-row .val.amber { color:var(--amber); }
 
-  .divider { height:0.5px; background:var(--border); margin:0.9rem 0; }
-  .ctrl-group-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--dimmed); margin-bottom:7px; }
-  .ctrl-row { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:0.75rem; }
-  .btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; padding:6px 11px; border-radius:6px; cursor:pointer; transition:all 0.12s; white-space:nowrap; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
-  .btn:hover { background:var(--surface3); color:var(--text); }
-  .btn:active { transform:scale(0.97); }
+  .divider { height:0.5px; background:var(--border); margin:0.75rem 0; }
+  .ctrl-group-label { font-family:var(--mono); font-size:9px; text-transform:uppercase;
+    letter-spacing:0.1em; color:var(--dimmed); margin-bottom:6px; }
+  .ctrl-row { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:0.6rem; }
+  .btn { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.06em;
+    padding:5px 10px; border-radius:6px; cursor:pointer; transition:all 0.12s; white-space:nowrap;
+    background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
+  .btn:hover   { background:var(--surface3); color:var(--text); }
+  .btn:active  { transform:scale(0.97); }
   .btn.b-pause:hover  { background:var(--amber-dim); border-color:var(--amber); color:var(--amber); }
   .btn.b-resume:hover { background:var(--green-dim); border-color:var(--green); color:var(--green); }
   .btn.b-goto:hover   { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
   .btn.b-adj:hover    { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
   .btn.b-detach:hover { background:var(--blue-dim); border-color:var(--blue); color:var(--blue); }
   .btn.b-attach:hover { background:var(--green-dim); border-color:var(--green); color:var(--green); }
-  .set-limit-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .limit-wrap    { display:flex; align-items:center; gap:5px; }
+  .btn.b-danger:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
+  .set-limit-row { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+  .limit-wrap { display:flex; align-items:center; gap:5px; }
   .limit-wrap label { font-family:var(--mono); font-size:10px; color:var(--dimmed); text-transform:uppercase; letter-spacing:0.06em; }
-  .last-seen { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:10px; text-align:right; }
+  .last-seen { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:8px; text-align:right; }
 
-  .log-section  { margin-top:2.5rem; border-top:0.5px solid var(--border); padding-top:1.5rem; }
-  .log-title    { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); margin-bottom:0.75rem; }
-  .log-entries  { display:flex; flex-direction:column; gap:3px; max-height:130px; overflow-y:auto; }
-  .log-entry    { font-family:var(--mono); font-size:11px; display:flex; gap:10px; }
-  .log-time     { color:var(--dimmed); flex-shrink:0; }
+  /* ── Log ── */
+  .log-section { margin-top:2rem; border-top:0.5px solid var(--border); padding-top:1.25rem; }
+  .log-title   { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); margin-bottom:0.6rem; }
+  .log-entries { display:flex; flex-direction:column; gap:3px; max-height:110px; overflow-y:auto; }
+  .log-entry   { font-family:var(--mono); font-size:11px; display:flex; gap:10px; }
+  .log-time    { color:var(--dimmed); flex-shrink:0; }
   .log-msg.ok   { color:var(--green); }
   .log-msg.warn { color:var(--amber); }
   .log-msg.err  { color:var(--red); }
   .log-msg.info { color:var(--muted); }
 
   /* ── Health log ── */
-  .health-section { margin-top:2.5rem; border-top:0.5px solid var(--border); padding-top:1.5rem; }
-  .health-header  { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:0.75rem; }
+  .health-section { margin-top:2rem; border-top:0.5px solid var(--border); padding-top:1.25rem; }
+  .health-header  { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem; }
   .health-title   { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dimmed); }
   .health-meta    { font-family:var(--mono); font-size:10px; color:var(--dimmed); display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
-  .health-meta .dot { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; margin-right:4px; }
-  .health-meta .dot.idle { background:var(--dimmed); }
-  .health-next    { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
   .btn-health     { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.07em; padding:4px 12px; border-radius:5px; cursor:pointer; transition:all 0.12s; background:var(--surface2); border:0.5px solid var(--border2); color:var(--muted); }
   .btn-health:hover { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
   .btn-health.danger:hover { background:var(--red-dim); border-color:var(--red); color:var(--red); }
-
-  .health-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:1rem; }
-  .health-card { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem 1.25rem; }
-  .health-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.85rem; }
+  .health-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0.85rem; }
+  .health-card { background:var(--surface); border:0.5px solid var(--border); border-radius:12px; padding:1rem; }
+  .health-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; }
   .health-card-title  { font-family:var(--mono); font-size:11px; color:var(--text); }
   .health-card-date   { font-family:var(--mono); font-size:10px; color:var(--dimmed); }
-
-  .health-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:0.85rem; }
-  .health-stat  { background:var(--surface2); border-radius:6px; padding:7px 10px; }
+  .health-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; margin-bottom:0.75rem; }
+  .health-stat  { background:var(--surface2); border-radius:6px; padding:6px 8px; }
   .health-stat-lbl { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:var(--dimmed); margin-bottom:3px; }
-  .health-stat-val { font-family:var(--mono); font-size:13px; }
-  .health-stat-val.good { color:var(--green); }
-  .health-stat-val.warn { color:var(--amber); }
-  .health-stat-val.bad  { color:var(--red); }
-  .health-stat-val.muted{ color:var(--dimmed); }
-
-  .health-chart { position:relative; height:60px; background:var(--surface2); border-radius:6px; overflow:hidden; }
-  .health-chart-line { position:absolute; bottom:0; left:0; width:100%; height:100%; }
+  .health-stat-val { font-family:var(--mono); font-size:12px; }
+  .health-stat-val.good  { color:var(--green); }
+  .health-stat-val.warn  { color:var(--amber); }
+  .health-stat-val.bad   { color:var(--red); }
+  .health-stat-val.muted { color:var(--dimmed); }
+  .health-chart { position:relative; height:55px; background:var(--surface2); border-radius:6px; overflow:hidden; }
+  .health-chart-line  { position:absolute; bottom:0; left:0; width:100%; height:100%; }
   .health-chart-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:10px; color:var(--dimmed); }
-  .health-chart-label { position:absolute; bottom:4px; right:6px; font-family:var(--mono); font-size:9px; color:var(--dimmed); }
-
-  .health-yesterday { margin-top:6px; font-family:var(--mono); font-size:10px; color:var(--dimmed); padding:6px 10px; background:var(--surface2); border-radius:6px; }
-  .health-yesterday span { color:var(--muted); margin-right:4px; }
-  .health-count { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:5px; text-align:right; }
+  .health-count { font-family:var(--mono); font-size:10px; color:var(--dimmed); margin-top:4px; text-align:right; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="header-left">
-    <h1>Installation Monitor</h1>
+    <h1>Installation Monitor — v3</h1>
     <p id="clock">—</p>
   </div>
   <div class="broker-config">
-    <input id="inp-url"  type="text"     placeholder="wss://your-host.hivemq.cloud:8884/mqtt" />
-    <input id="inp-user" type="text"     placeholder="username" />
-    <input id="inp-pass" type="password" placeholder="password" />
+    <input id="inp-url"  type="text"     placeholder="wss://your-host.hivemq.cloud:8884/mqtt"/>
+    <input id="inp-user" type="text"     placeholder="username"/>
+    <input id="inp-pass" type="password" placeholder="password"/>
     <div class="broker-row">
       <button class="connect-btn" onclick="toggleConnect()">Connect</button>
       <span class="conn-status">
@@ -279,140 +328,43 @@
   </div>
 </header>
 
-<div class="master-bar">
-  <div class="master-label">Master</div>
+<!-- Master + global actions -->
+<div class="top-bar">
+  <div class="bar-label">Master</div>
   <button class="master-on-btn"  id="master-on-btn"  onclick="masterOn()">On</button>
   <button class="master-off-btn" id="master-off-btn" onclick="masterOff()">Off</button>
   <span class="master-status" id="master-status">—</span>
-  <div style="margin-left:auto;display:flex;gap:8px">
+  <div style="margin-left:auto;display:flex;gap:6px">
     <button class="btn-action" onclick="rebootAll()">Reboot all</button>
     <button class="btn-action danger" onclick="resetWifiAll()">Reset Wi-Fi (all)</button>
   </div>
 </div>
 
-<div class="monitor-all-bar">
-  <div class="monitor-all-label">Monitor</div>
-  <button class="btn-action" onclick="monitorAll()">All units on</button>
-  <button class="btn-action stop" onclick="stopAll()">All units off</button>
-  <button class="toggle-btn" id="auto-mon-btn" onclick="toggleAutoMonitor()">Auto-Monitor</button>
-  <span id="auto-mon-status" style="font-family:var(--mono);font-size:10px;color:var(--dimmed)"></span>
-  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
-    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed)">Auto-reboot silent units:</span>
-    <button class="toggle-btn" id="auto-reboot-btn" onclick="toggleAutoReboot()">Off</button>
-  </div>
+<!-- Monitor all -->
+<div class="top-bar">
+  <div class="bar-label">Monitor</div>
+  <button class="btn-action" onclick="monitorAll()">Fast rate — all</button>
+  <button class="btn-action stop" onclick="slowAll()">Slow rate — all</button>
+  <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:8px">
+    Fast = 5 s · Slow = 30 s · units publish continuously either way
+  </span>
 </div>
 
-<!-- Combined motion + thermal control panel -->
-<div class="control-panel">
-  <div class="control-panel-header">
-    <div class="control-panel-title">Motion &amp; thermal control</div>
-    <div class="unit-tabs">
-      <button class="unit-tab active" id="ctab-1" onclick="selectControlUnit(1)">Unit 1</button>
-      <button class="unit-tab"        id="ctab-2" onclick="selectControlUnit(2)">Unit 2</button>
-      <button class="unit-tab"        id="ctab-3" onclick="selectControlUnit(3)">Unit 3</button>
-    </div>
-  </div>
-
-  <div class="control-section-label">Motion parameters</div>
-  <div class="params-grid">
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Speed <span style="color:var(--dimmed);font-size:9px">(slow ← → fast)</span></div>
-        <div><span class="param-value" id="speed-display">35 ms</span><span class="param-board" id="speed-board"> · board: —</span></div>
-      </div>
-      <input type="range" id="speed-slider" min="10" max="80" value="35" oninput="onParamSlider('speed')" onchange="sendParamLive('speed')" />
-    </div>
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Hesitation <span style="color:var(--dimmed);font-size:9px">(rare ← → frequent)</span></div>
-        <div><span class="param-value" id="hesit-display">15</span><span class="param-board" id="hesit-board"> · board: —</span></div>
-      </div>
-      <input type="range" id="hesit-slider" min="0" max="100" value="15" oninput="onParamSlider('hesit')" onchange="sendParamLive('hesit')" />
-    </div>
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Pause between sweeps <span style="color:var(--dimmed);font-size:9px">(s)</span></div>
-        <div><span class="param-value" id="pause-display">9 s</span><span class="param-board" id="pause-board"> · board: —</span></div>
-      </div>
-      <input type="range" id="pause-slider" min="1" max="30" value="9" oninput="onParamSlider('pause')" onchange="sendParamLive('pause')" />
-    </div>
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Step size <span style="color:var(--dimmed);font-size:9px">(smooth ← → coarse)</span></div>
-        <div><span class="param-value" id="step-display">0.6°</span><span class="param-board" id="step-board"> · board: —</span></div>
-      </div>
-      <input type="range" id="step-slider" min="2" max="20" value="6" oninput="onParamSlider('step')" onchange="sendParamLive('step')" />
-    </div>
-  </div>
-  <div class="control-actions">
-    <button class="btn-save motion" onclick="saveMotion()">Save motion to flash</button>
-    <span class="save-flash motion" id="motion-saved"></span>
-    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Changes apply instantly · Save persists through reboots</span>
-  </div>
-
-  <!-- FIX: Slider ranges updated to match firmware limits (38–60°C cutoff, 30–55°C resume) -->
-  <!-- FIX: Default values updated to 50/42 to reflect intended operating range -->
-  <div class="control-section-label">Thermal protection</div>
-  <div class="params-grid">
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Shutdown above <span style="color:var(--dimmed);font-size:9px">(°C)</span></div>
-        <div><span class="param-value" id="cutoff-display" style="color:var(--red)">50°C</span><span class="param-board" id="cutoff-board"> · board: —</span></div>
-      </div>
-      <input type="range" class="thermal" id="cutoff-slider" min="38" max="60" value="50" oninput="onParamSlider('cutoff')" onchange="sendParamLive('cutoff')" />
-    </div>
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Resume below <span style="color:var(--dimmed);font-size:9px">(°C)</span></div>
-        <div><span class="param-value" id="resume-display" style="color:var(--amber)">42°C</span><span class="param-board" id="resume-board"> · board: —</span></div>
-      </div>
-      <input type="range" class="thermal" id="resume-slider" min="30" max="55" value="42" oninput="onParamSlider('resume')" onchange="sendParamLive('resume')" />
-    </div>
-  </div>
-  <div class="control-actions">
-    <button class="btn-save thermal" onclick="saveThermal()">Save thermal to flash</button>
-    <span class="save-flash thermal" id="thermal-saved"></span>
-    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Auto-saved on change · Cutoff must be ≥ Resume + 5°C</span>
-  </div>
-
-  <div class="control-section-label">Cooldown cycle</div>
-  <div class="params-grid">
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Active window <span style="color:var(--dimmed);font-size:9px">(minutes before rest)</span></div>
-        <div><span class="param-value" id="cdactive-display">10 min</span><span class="param-board" id="cdactive-board"> · board: —</span></div>
-      </div>
-      <input type="range" id="cdactive-slider" min="2" max="30" value="10" oninput="onParamSlider('cdactive')" onchange="sendParamLive('cdactive')" />
-    </div>
-    <div class="param-row">
-      <div class="param-header">
-        <div class="param-label">Rest duration <span style="color:var(--dimmed);font-size:9px">(minutes detached)</span></div>
-        <div><span class="param-value" id="cdrest-display">1 min</span><span class="param-board" id="cdrest-board"> · board: —</span></div>
-      </div>
-      <input type="range" id="cdrest-slider" min="1" max="10" value="1" oninput="onParamSlider('cdrest')" onchange="sendParamLive('cdrest')" />
-    </div>
-  </div>
-  <div class="control-actions">
-    <button class="btn-save motion" onclick="saveCooldown()">Save cooldown to flash</button>
-    <span class="save-flash motion" id="cooldown-saved"></span>
-    <span style="font-family:var(--mono);font-size:10px;color:var(--dimmed);margin-left:auto">Changes apply on next cooldown cycle</span>
-  </div>
-</div>
-
+<!-- Schedule panel -->
 <div class="panel">
-  <div class="panel-title">Board schedule — persistent, survives power off</div>
+  <div class="panel-title">Schedule — sent to all units</div>
   <div class="panel-row">
-    <div class="panel-row-label">On / Off times</div>
-    <input type="time" id="new-sched-on"  value="09:00" />
+    <div class="panel-row-label">Hours</div>
+    <input type="time" id="new-sched-on"  value="09:00"/>
     <span class="sep">→</span>
-    <input type="time" id="new-sched-off" value="18:00" />
-    <button class="btn-set" onclick="sendScheduleToAll()">Send to all units</button>
+    <input type="time" id="new-sched-off" value="18:00"/>
+    <button class="btn-set" onclick="sendScheduleToAll()">Send to all</button>
     <span class="confirm-flash" id="sched-confirm"></span>
   </div>
   <div class="panel-row">
-    <div class="panel-row-label">Blackout dates</div>
-    <input type="date" id="blackout-date" />
-    <button class="btn-set" onclick="addBlackoutToAll()">Add to all units</button>
+    <div class="panel-row-label">Blackout date</div>
+    <input type="date" id="blackout-date"/>
+    <button class="btn-set" onclick="addBlackoutToAll()">Add blackout</button>
     <span class="confirm-flash" id="blackout-confirm"></span>
   </div>
   <div class="blackout-tags" id="blackout-tags-display">
@@ -420,156 +372,199 @@
   </div>
 </div>
 
+<!-- Dashboard schedule override -->
 <div class="panel">
-  <div class="panel-title">Dashboard override — re-asserts on reconnect</div>
+  <div class="panel-title">Dashboard schedule override</div>
   <div class="panel-row">
-    <div class="panel-row-label">Override times</div>
-    <input type="time" id="sched-on"  value="09:00" />
-    <span class="sep">→</span>
-    <input type="time" id="sched-off" value="18:00" />
+    <div class="panel-row-label">Override</div>
     <button class="toggle-btn" id="sched-btn" onclick="toggleSchedule()">Enable</button>
-    <div style="display:flex;flex-direction:column;gap:3px">
-      <div class="status-text" id="sched-status">override off</div>
-      <div class="status-text" id="sched-next"></div>
-    </div>
+    <input type="time" id="sched-on"  value="09:00"/>
+    <span class="sep">→</span>
+    <input type="time" id="sched-off" value="18:00"/>
+    <span class="status-text" id="sched-status">override off</span>
+    <span class="status-text" id="sched-next"></span>
   </div>
 </div>
 
-<div class="units-grid" id="units-grid"></div>
-
-<div class="log-section">
-  <div class="log-title">Event log</div>
-  <div class="log-entries" id="log"></div>
+<!-- Motion + thermal control panel -->
+<div class="control-panel">
+  <div class="control-panel-header">
+    <div class="control-panel-title">Motion &amp; Thermal — per unit</div>
+    <div class="unit-tabs" id="unit-tabs"></div>
+  </div>
+  <div id="control-body"></div>
 </div>
 
+<!-- 4-unit grid -->
+<div class="units-grid" id="units-grid"></div>
+
+<!-- Event log -->
+<div class="log-section">
+  <div class="log-title">Event log</div>
+  <div class="log-entries" id="log-entries"></div>
+</div>
+
+<!-- Health log -->
 <div class="health-section">
   <div class="health-header">
     <div class="health-title">Temperature health log</div>
     <div class="health-meta">
-      <span><span class="dot idle" id="health-dot"></span><span id="health-status">idle</span></span>
-      <span class="health-next" id="health-next">—</span>
-      <button class="btn-health" onclick="runHealthCheck()">Check now</button>
-      <button class="btn-health danger" onclick="clearHealthLog()">Clear log</button>
+      <span><span class="dot" id="health-dot"></span><span id="health-status">idle</span></span>
+      <span id="health-next"></span>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn-health" onclick="exportHealthLog()">Export CSV</button>
+      <button class="btn-health danger" onclick="clearHealthLog()">Clear</button>
     </div>
   </div>
   <div class="health-grid" id="health-grid"></div>
 </div>
 
 <script>
-const UNIT_COUNT = 3;
-const MONITOR_MS = 120000;
-const HEAP_WARN = 60000; const HEAP_BAD = 30000; const HEAP_MAX = 200000;
+// ─────────────────────────────────────────────────────────────────────────────
+//  Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+const UNIT_COUNT  = 3;
+const HEAP_MAX    = 300*1024;
+const HEAP_WARN   = 100*1024;
+const HEAP_BAD    = 50*1024;
+const MONITOR_MS  = 120000; // 2-minute fast-publish window per click
+const HEALTH_INTERVAL_MS = 5*60*1000; // sample health every 5 min
+const HEALTH_MAX_SAMPLES = 288;       // 24 h at 5-min intervals
+const WATCHDOG_MS   = 60000;  // 60 s silence during ON hours → auto-reboot
+const REBOOT_GAP_MS = 300000; // 5 min minimum between consecutive auto-reboots per unit
 
-let client = null, schedActive = false, schedInterval = null, lastSchedState = null, masterState = null;
+// ─────────────────────────────────────────────────────────────────────────────
+//  State
+// ─────────────────────────────────────────────────────────────────────────────
+let client = null;
+let masterState = null;
+let schedActive = false, lastSchedState = null, schedInterval = null;
+let dashboardBlackouts = new Set();
+let monitorCountdowns = {};
+let watchdogTimers    = {};
+let lastAutoReboot    = {};
 let controlUnit = 1;
-const dashboardBlackouts = new Set();
-const monitorCountdowns  = {};
+let healthTimer  = null;
+let healthLog    = {};   // { unitId: [{ts, temp}] }
+let lastHealthSample = {};
 
 const units = {};
 for (let i = 1; i <= UNIT_COUNT; i++) {
   units[i] = {
-    angle:null,uptime:null,paused:false,detached:false,rssi:null,
-    minLimit:null,maxLimit:null,ntpSynced:null,boardTime:null,
-    schedOn:null,schedOff:null,blackouts:[],monitoring:false,master:null,
-    cpuTemp:null,freeHeap:null,lastSeen:null,
-    mSpeed:null,mHesit:null,mPause:null,mStep:null,
-    tCutoff:null,tResume:null,thermalSd:false,
-    cdActive:null,cdRest:null,inCooldown:false,
-    lastAngle:null,lastAngleChange:null
+    lastSeen:null, monitoring:false,
+    angle:null, paused:null, detached:null,
+    thermalSd:false, inCooldown:false, master:null,
+    ntpSynced:null, uptime:null, rssi:null, cpuTemp:null,
+    freeHeap:null, boardTime:null, schedOn:null, schedOff:null,
+    blackouts:[], minLimit:null, maxLimit:null,
+    mSpeed:null, mHesit:null, mPause:null, mStep:null,
+    cdActive:null, cdRest:null, tCutoff:null, tResume:null,
+    pubInterval:null,
+    _thermalLogged:false
   };
+  healthLog[i] = [];
+  lastHealthSample[i] = 0;
+  watchdogTimers[i]   = null;
+  lastAutoReboot[i]   = 0;
 }
 
-// ── Control panel ─────────────────────────────────────────────────────────────
-function selectControlUnit(id) {
-  controlUnit = id;
-  for (let i = 1; i <= UNIT_COUNT; i++) document.getElementById(`ctab-${i}`).classList.toggle('active', i===id);
-  syncControlSliders(id);
+// ─────────────────────────────────────────────────────────────────────────────
+//  DOM build
+// ─────────────────────────────────────────────────────────────────────────────
+function buildAll() { buildTabs(); buildControlBody(); buildCards(); buildHealthGrid(); }
+
+function buildTabs() {
+  const el = document.getElementById('unit-tabs');
+  el.innerHTML = '';
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    el.insertAdjacentHTML('beforeend',
+      `<div class="unit-tab${i===controlUnit?' active':''}" onclick="selectUnit(${i})">Unit ${i}</div>`);
+  }
 }
 
-function syncControlSliders(id) {
-  const u = units[id];
-  if (u.mSpeed  != null) { document.getElementById('speed-slider').value  = u.mSpeed; document.getElementById('hesit-slider').value  = u.mHesit; document.getElementById('pause-slider').value  = u.mPause; document.getElementById('step-slider').value   = u.mStep; }
-  if (u.tCutoff != null) { document.getElementById('cutoff-slider').value = u.tCutoff; document.getElementById('resume-slider').value = u.tResume; }
-  if (u.cdActive != null) { document.getElementById('cdactive-slider').value = u.cdActive; document.getElementById('cdrest-slider').value = u.cdRest; }
-  updateAllDisplays();
-  updateBoardValues(id);
+function buildControlBody() {
+  document.getElementById('control-body').innerHTML = `
+    <div class="control-section-label">Motion parameters</div>
+    <div class="params-grid">
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Speed (ms/step)</span>
+          <span><span class="param-value" id="ctrl-speed-val">35</span>
+          <span class="param-board" id="ctrl-speed-board"></span></span></div>
+        <input type="range" id="ctrl-speed" min="10" max="80" value="35"
+          oninput="sliderInput('speed',this.value)" onchange="sliderSend('set_speed',this.value)"/>
+      </div>
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Hesitation (0–100)</span>
+          <span><span class="param-value" id="ctrl-hesit-val">15</span>
+          <span class="param-board" id="ctrl-hesit-board"></span></span></div>
+        <input type="range" id="ctrl-hesit" min="0" max="100" value="15"
+          oninput="sliderInput('hesit',this.value)" onchange="sliderSend('set_hesitation',this.value)"/>
+      </div>
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Pause between sweeps (s)</span>
+          <span><span class="param-value" id="ctrl-pause-val">9</span>
+          <span class="param-board" id="ctrl-pause-board"></span></span></div>
+        <input type="range" id="ctrl-pause" min="1" max="30" value="9"
+          oninput="sliderInput('pause',this.value)" onchange="sliderSend('set_pause',this.value)"/>
+      </div>
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Step size (×0.1°)</span>
+          <span><span class="param-value" id="ctrl-step-val">6</span>
+          <span class="param-board" id="ctrl-step-board"></span></span></div>
+        <input type="range" id="ctrl-step" min="2" max="20" value="6"
+          oninput="sliderInput('step',this.value)" onchange="sliderSend('set_step',this.value)"/>
+      </div>
+    </div>
+    <div class="control-actions">
+      <button class="btn-save motion" onclick="saveMotion()">Save motion</button>
+      <span class="save-flash motion" id="save-motion-flash"></span>
+    </div>
+
+    <div class="control-section-label">Cooldown cycle</div>
+    <div class="params-grid">
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Active window (min)</span>
+          <span><span class="param-value" id="ctrl-cdact-val">10</span>
+          <span class="param-board" id="ctrl-cdact-board"></span></span></div>
+        <input type="range" id="ctrl-cdact" min="2" max="30" value="10"
+          oninput="sliderInput('cdact',this.value)" onchange="sliderSend('set_cd_active',this.value)"/>
+      </div>
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Rest period (min)</span>
+          <span><span class="param-value" id="ctrl-cdrst-val">1</span>
+          <span class="param-board" id="ctrl-cdrst-board"></span></span></div>
+        <input type="range" id="ctrl-cdrst" min="1" max="10" value="1"
+          oninput="sliderInput('cdrst',this.value)" onchange="sliderSend('set_cd_rest',this.value)"/>
+      </div>
+    </div>
+    <div class="control-actions">
+      <button class="btn-save motion" onclick="saveCooldown()">Save cooldown</button>
+      <span class="save-flash motion" id="save-cooldown-flash"></span>
+    </div>
+
+    <div class="control-section-label">Thermal protection — auto-saved on change</div>
+    <div class="params-grid">
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Shutdown cutoff (°C)</span>
+          <span><span class="param-value" id="ctrl-cutoff-val">50</span>
+          <span class="param-board" id="ctrl-cutoff-board"></span></span></div>
+        <input type="range" class="thermal" id="cutoff-slider" min="38" max="60" value="50"
+          oninput="sliderInput('cutoff',this.value)" onchange="sliderSend('set_temp_cutoff',this.value)"/>
+      </div>
+      <div class="param-row">
+        <div class="param-header"><span class="param-label">Resume below (°C)</span>
+          <span><span class="param-value" id="ctrl-resume-val">42</span>
+          <span class="param-board" id="ctrl-resume-board"></span></span></div>
+        <input type="range" class="thermal" id="resume-slider" min="30" max="55" value="42"
+          oninput="sliderInput('resume',this.value)" onchange="sliderSend('set_temp_resume',this.value)"/>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--dimmed);margin-top:4px">
+      Auto-saved on change · Cutoff must be ≥ Resume + 5°C
+    </div>`;
 }
 
-function updateAllDisplays() {
-  const speed  = parseInt(document.getElementById('speed-slider').value);
-  const hesit  = parseInt(document.getElementById('hesit-slider').value);
-  const pause  = parseInt(document.getElementById('pause-slider').value);
-  const step   = parseInt(document.getElementById('step-slider').value);
-  const cutoff = parseInt(document.getElementById('cutoff-slider').value);
-  const resume = parseInt(document.getElementById('resume-slider').value);
-  document.getElementById('speed-display').textContent  = speed + ' ms';
-  document.getElementById('hesit-display').textContent  = hesit;
-  document.getElementById('pause-display').textContent  = pause + ' s';
-  document.getElementById('step-display').textContent   = (step/10).toFixed(1) + '°';
-  document.getElementById('cutoff-display').textContent = cutoff + '°C';
-  document.getElementById('resume-display').textContent = resume + '°C';
-  document.getElementById('cdactive-display').textContent = parseInt(document.getElementById('cdactive-slider').value) + ' min';
-  document.getElementById('cdrest-display').textContent   = parseInt(document.getElementById('cdrest-slider').value)   + ' min';
-}
-
-function updateBoardValues(id) {
-  const u = units[id];
-  document.getElementById('speed-board').textContent  = u.mSpeed  != null ? ` · board: ${u.mSpeed}ms`            : ' · board: —';
-  document.getElementById('hesit-board').textContent  = u.mHesit  != null ? ` · board: ${u.mHesit}`              : ' · board: —';
-  document.getElementById('pause-board').textContent  = u.mPause  != null ? ` · board: ${u.mPause}s`             : ' · board: —';
-  document.getElementById('step-board').textContent   = u.mStep   != null ? ` · board: ${(u.mStep/10).toFixed(1)}°` : ' · board: —';
-  document.getElementById('cutoff-board').textContent = u.tCutoff != null ? ` · board: ${u.tCutoff}°C`           : ' · board: —';
-  document.getElementById('resume-board').textContent = u.tResume != null ? ` · board: ${u.tResume}°C`           : ' · board: —';
-  document.getElementById('cdactive-board').textContent = u.cdActive != null ? ` · board: ${u.cdActive}min`      : ' · board: —';
-  document.getElementById('cdrest-board').textContent   = u.cdRest   != null ? ` · board: ${u.cdRest}min`        : ' · board: —';
-}
-
-function onParamSlider(param) { updateAllDisplays(); }
-
-function sendParamLive(param) {
-  const val = document.getElementById(`${param}-slider`).value;
-  const map = { speed:'set_speed', hesit:'set_hesitation', pause:'set_pause', step:'set_step', cutoff:'set_temp_cutoff', resume:'set_temp_resume', cdactive:'set_cd_active', cdrest:'set_cd_rest' };
-  sendCmd(controlUnit, `${map[param]}:${val}`);
-}
-
-function saveMotion() {
-  sendCmd(controlUnit, 'save_motion');
-  const el = document.getElementById('motion-saved');
-  el.textContent = `saved to unit ${controlUnit}`;
-  setTimeout(() => el.textContent = '', 3000);
-  addLog(`motion saved to unit ${controlUnit}`, 'ok');
-}
-
-function saveThermal() {
-  sendCmd(controlUnit, 'save_thermal');
-  const el = document.getElementById('thermal-saved');
-  el.textContent = `saved to unit ${controlUnit}`;
-  setTimeout(() => el.textContent = '', 3000);
-  addLog(`thermal saved to unit ${controlUnit}`, 'ok');
-}
-
-function saveCooldown() {
-  sendCmd(controlUnit, 'save_cooldown');
-  const el = document.getElementById('cooldown-saved');
-  el.textContent = `saved to unit ${controlUnit}`;
-  setTimeout(() => el.textContent = '', 3000);
-  addLog(`cooldown saved to unit ${controlUnit}`, 'ok');
-}
-
-// ── Master switch ─────────────────────────────────────────────────────────────
-function masterOn()  { sendCmdAll('master_on');  masterState=true;  updateMasterUI(); addLog('master ON → all units','ok'); }
-function masterOff() {
-  if (!confirm('Turn off all units? Servos will detach and stay off until Master On is pressed.')) return;
-  sendCmdAll('master_off'); masterState=false; updateMasterUI(); addLog('master OFF → all units','warn');
-}
-function updateMasterUI() {
-  const onBtn=document.getElementById('master-on-btn'), offBtn=document.getElementById('master-off-btn'), status=document.getElementById('master-status');
-  if (masterState===true)  { onBtn.classList.remove('inactive'); offBtn.classList.remove('active'); status.textContent='installation running'; status.className='master-status on'; }
-  else if (masterState===false) { onBtn.classList.add('inactive'); offBtn.classList.add('active'); status.textContent='installation off'; status.className='master-status off'; }
-  else { onBtn.classList.remove('inactive'); offBtn.classList.remove('active'); status.textContent='—'; status.className='master-status'; }
-}
-
-// ── Build cards ───────────────────────────────────────────────────────────────
 function buildCards() {
   const grid = document.getElementById('units-grid');
   grid.innerHTML = '';
@@ -584,30 +579,33 @@ function buildCards() {
               <span class="badge detached"    id="badge-detached-${i}" style="display:none">detached</span>
               <span class="badge blackout-on" id="badge-blackout-${i}" style="display:none">blackout</span>
               <span class="badge master-off"  id="badge-master-${i}"   style="display:none">master off</span>
-              <span class="badge thermal-sd"  id="badge-thermal-${i}"  style="display:none">🌡 thermal shutdown</span>
-              <span class="badge detached"    id="badge-cooldown-${i}" style="display:none">cooling down</span>
+              <span class="badge thermal-sd"  id="badge-thermal-${i}"  style="display:none">🌡 thermal</span>
+              <span class="badge detached"    id="badge-cooldown-${i}" style="display:none">cooling</span>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
-            <span class="pill waiting" id="pill-${i}">Standby</span>
+            <span class="pill waiting" id="pill-${i}">Waiting</span>
             <span class="badge ntp-fail" id="ntp-badge-${i}">ntp —</span>
           </div>
         </div>
 
         <div class="monitor-row">
           <button class="monitor-btn" id="mon-btn-${i}" onclick="toggleMonitor(${i})">Monitor</button>
-          <div class="monitor-countdown" id="mon-cd-${i}"></div>
+          <span class="pub-rate" id="pub-rate-${i}"></span>
         </div>
 
         <div class="pos-row">
-          <svg width="68" height="42" viewBox="0 0 68 42" style="flex-shrink:0">
+          <svg width="62" height="40" viewBox="0 0 68 42" style="flex-shrink:0">
             <path d="M6,38 A28,28 0 0,1 62,38" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="5" stroke-linecap="round"/>
-            <path id="arc-${i}" d="M6,38 A28,28 0 0,1 62,38" fill="none" stroke="#c8b8f8" stroke-width="5" stroke-linecap="round" stroke-dasharray="100" stroke-dashoffset="100" style="transition:stroke-dashoffset 0.4s;opacity:0.25"/>
-            <circle id="dot-${i}" cx="34" cy="38" r="4" fill="#c8b8f8" opacity="0.2" style="transition:cx 0.4s,cy 0.4s"/>
+            <path id="arc-${i}" d="M6,38 A28,28 0 0,1 62,38" fill="none" stroke="#c8b8f8"
+              stroke-width="5" stroke-linecap="round" stroke-dasharray="100" stroke-dashoffset="100"
+              style="transition:stroke-dashoffset 0.4s;opacity:0.25"/>
+            <circle id="dot-${i}" cx="34" cy="38" r="4" fill="#c8b8f8" opacity="0.2"
+              style="transition:cx 0.4s,cy 0.4s"/>
           </svg>
           <div>
             <div><span class="servo-angle-big" id="angle-${i}" style="opacity:0.3">—</span><span class="servo-deg-sm">°</span></div>
-            <div class="servo-sub" id="state-${i}">standby</div>
+            <div class="servo-sub" id="state-${i}">waiting for data</div>
           </div>
         </div>
 
@@ -660,12 +658,11 @@ function buildCards() {
         <div class="board-sched-row">
           <span>Schedule:</span><span class="val" id="boardsched-on-${i}">—</span>
           <span>→</span><span class="val" id="boardsched-off-${i}">—</span>
-          <span style="margin-left:8px">Blackouts:</span>
-          <span class="val" id="boardblackouts-${i}" style="color:var(--amber)">none</span>
+          <span style="margin-left:6px">Blackouts:</span>
+          <span class="val amber" id="boardblackouts-${i}">none</span>
         </div>
 
         <div class="divider"></div>
-
         <div class="ctrl-group-label">Sequence</div>
         <div class="ctrl-row">
           <button class="btn b-pause"  onclick="sendCmd(${i},'pause')">Pause</button>
@@ -674,7 +671,6 @@ function buildCards() {
           <button class="btn b-attach" onclick="sendCmd(${i},'attach')">Attach</button>
           <button class="btn b-danger" onclick="rebootUnit(${i})">Reboot</button>
         </div>
-
         <div class="ctrl-group-label">Go to</div>
         <div class="ctrl-row">
           <button class="btn b-goto" onclick="sendCmd(${i},'goto_min')">Min</button>
@@ -683,744 +679,653 @@ function buildCards() {
           <button class="btn b-adj"  onclick="sendCmd(${i},'adjust_up')">+5°</button>
           <button class="btn b-adj"  onclick="sendCmd(${i},'adjust_down')">−5°</button>
         </div>
-
         <div class="ctrl-group-label">Set limits</div>
         <div class="set-limit-row">
           <div class="limit-wrap"><label>Min</label><input class="num-input" type="number" id="set-min-${i}" min="0" max="180" placeholder="°"/></div>
           <div class="limit-wrap"><label>Max</label><input class="num-input" type="number" id="set-max-${i}" min="0" max="180" placeholder="°"/></div>
           <button class="btn-set" onclick="sendLimits(${i})">Set</button>
         </div>
-
-        <div class="last-seen" id="lastseen-${i}">never monitored</div>
-      </div>
-    `);
+        <div class="last-seen" id="lastseen-${i}">never seen</div>
+      </div>`);
   }
 }
 
-// ── Sensor bar update ─────────────────────────────────────────────────────────
-function updateTempBar(id, temp, cutoff, resume) {
-  const fillEl = document.getElementById(`temp-fill-${id}`);
-  const valEl  = document.getElementById(`temp-val-${id}`);
-  const thrEl  = document.getElementById(`temp-thresholds-${id}`);
-  if (cutoff != null && resume != null) thrEl.textContent = `resume ${resume}° / shutdown ${cutoff}°`;
-  if (temp == null) { fillEl.style.width='0%'; valEl.textContent='— °C'; valEl.className='sensor-value muted'; return; }
-  const max = cutoff ? cutoff + 10 : 70;
-  fillEl.style.width = Math.min(100, (temp/max)*100).toFixed(1)+'%';
-  let cls, color;
-  if      (temp < (resume || 42)) { cls='good'; color='#4ade80'; }
-  else if (temp < (cutoff || 50)) { cls='warn'; color='#fbbf24'; }
-  else                            { cls='bad';  color='#f87171'; }
-  fillEl.style.background = color;
-  valEl.className = 'sensor-value ' + cls;
-  valEl.textContent = temp.toFixed(1) + ' °C';
-}
-
-function updateHeapBar(id, heap) {
-  const fillEl = document.getElementById(`heap-fill-${id}`);
-  const valEl  = document.getElementById(`heap-val-${id}`);
-  if (heap==null) { fillEl.style.width='0%'; valEl.textContent='— KB'; valEl.className='sensor-value muted'; return; }
-  fillEl.style.width = Math.min(100,(heap/HEAP_MAX)*100).toFixed(1)+'%';
-  const cls   = heap>HEAP_WARN?'good':heap>HEAP_BAD?'warn':'bad';
-  const color = heap>HEAP_WARN?'#4ade80':heap>HEAP_BAD?'#fbbf24':'#f87171';
-  fillEl.style.background=color; valEl.className='sensor-value '+cls;
-  valEl.textContent = (heap/1024).toFixed(0)+' KB';
-}
-
-function clearSensors(id) { updateTempBar(id,null,null,null); updateHeapBar(id,null); }
-
-// ── Monitor control ───────────────────────────────────────────────────────────
-function toggleMonitor(id) {
-  if (units[id].monitoring) { sendCmd(id,'monitor_off'); stopMonitorUI(id); }
-  else                      { sendCmd(id,'monitor_on');  startMonitorUI(id); }
-}
-
-function startMonitorUI(id) {
-  units[id].monitoring=true;
-  document.getElementById(`mon-btn-${id}`).textContent='Stop';
-  document.getElementById(`mon-btn-${id}`).classList.add('active');
-  document.getElementById(`card-${id}`).classList.add('monitoring-active');
-  let remaining=MONITOR_MS/1000;
-  const cdEl=document.getElementById(`mon-cd-${id}`);
-  if (monitorCountdowns[id]) clearInterval(monitorCountdowns[id]);
-  monitorCountdowns[id]=setInterval(()=>{
-    remaining--;
-    if (remaining<=0) { stopMonitorUI(id); return; }
-    cdEl.textContent=`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`;
-  },1000);
-  cdEl.textContent='2:00';
-}
-
-function stopMonitorUI(id) {
-  units[id].monitoring=false;
-  document.getElementById(`mon-btn-${id}`).textContent='Monitor';
-  document.getElementById(`mon-btn-${id}`).classList.remove('active');
-  document.getElementById(`card-${id}`).classList.remove('monitoring-active');
-  if (monitorCountdowns[id]) { clearInterval(monitorCountdowns[id]); delete monitorCountdowns[id]; }
-  document.getElementById(`mon-cd-${id}`).textContent='';
-  document.getElementById(`angle-${id}`).style.opacity='0.3';
-  document.getElementById(`arc-${id}`).style.opacity='0.25';
-  document.getElementById(`dot-${id}`).style.opacity='0.2';
-  document.getElementById(`rthumb-${id}`).style.opacity='0.2';
-  document.getElementById(`pill-${id}`).className='pill waiting';
-  document.getElementById(`pill-${id}`).textContent='Standby';
-  document.getElementById(`state-${id}`).textContent='standby';
-  clearSensors(id);
-}
-
-function monitorAll() { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_on');startMonitorUI(i);}addLog('monitor on → all units','ok'); }
-function stopAll()    { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_off');stopMonitorUI(i);}addLog('monitor off → all units','warn'); }
-
-// ── Auto-Monitor — re-sends monitor_on every 90 s so the firmware's 2-min window never expires ──
-let autoMonitorActive=false, autoMonitorTimer=null;
-let autoRebootActive=false;
-const AUTO_MON_INTERVAL=90000;   // 90 seconds — firmware window is 120 s
-const AUTO_REBOOT_SILENCE=180000; // 3 minutes silence before auto-reboot
-
-function toggleAutoMonitor() {
-  autoMonitorActive=!autoMonitorActive;
-  const btn=document.getElementById('auto-mon-btn'), st=document.getElementById('auto-mon-status');
-  if(autoMonitorActive){
-    btn.classList.add('on'); btn.textContent='Auto-Monitor: ON'; st.textContent='— refreshes every 90 s';
-    for(let i=1;i<=UNIT_COUNT;i++){ if(!units[i].detached&&!units[i].inCooldown){ sendCmd(i,'monitor_on'); startMonitorUI(i); } }
-    autoMonitorTimer=setInterval(()=>{
-      // Only refresh monitoring for units that are actually running (not detached).
-      // Detached units are kept in quiet heartbeat mode (5-min interval) to prevent
-      // continuous TLS publishing from raising ESP32 CPU temperature unnecessarily.
-      let activeCount=0;
-      for(let i=1;i<=UNIT_COUNT;i++){
-        if(units[i].detached||units[i].inCooldown){
-          // Unit is at rest — let the heartbeat timer handle presence; don't force monitoring
-          continue;
-        }
-        sendCmd(i,'monitor_on'); startMonitorUI(i); activeCount++;
-      }
-      checkSilentUnits();
-      addLog(`auto: monitor_on → ${activeCount} active unit(s)`,'info');
-    }, AUTO_MON_INTERVAL);
-    addLog('auto-monitor enabled — 90 s refresh','ok');
-  } else {
-    clearInterval(autoMonitorTimer); autoMonitorTimer=null;
-    btn.classList.remove('on'); btn.textContent='Auto-Monitor'; st.textContent='';
-    addLog('auto-monitor disabled','warn');
+function buildHealthGrid() {
+  const g = document.getElementById('health-grid');
+  g.innerHTML = '';
+  for (let i = 1; i <= UNIT_COUNT; i++) {
+    g.insertAdjacentHTML('beforeend', `
+      <div class="health-card">
+        <div class="health-card-header">
+          <div class="health-card-title">Unit ${i}</div>
+          <div class="health-card-date" id="hdate-${i}">—</div>
+        </div>
+        <div class="health-stats">
+          <div class="health-stat"><div class="health-stat-lbl">Min</div><div class="health-stat-val muted" id="hmin-${i}">—</div></div>
+          <div class="health-stat"><div class="health-stat-lbl">Avg</div><div class="health-stat-val muted" id="havg-${i}">—</div></div>
+          <div class="health-stat"><div class="health-stat-lbl">Max</div><div class="health-stat-val muted" id="hmax-${i}">—</div></div>
+        </div>
+        <div class="health-chart">
+          <canvas class="health-chart-line" id="hcanvas-${i}"></canvas>
+          <div class="health-chart-empty" id="hempty-${i}">no data yet</div>
+        </div>
+        <div class="health-count" id="hcount-${i}"></div>
+      </div>`);
   }
 }
 
-function toggleAutoReboot() {
-  autoRebootActive=!autoRebootActive;
-  const btn=document.getElementById('auto-reboot-btn');
-  btn.textContent=autoRebootActive?'On — 3 min':'Off';
-  btn.classList.toggle('on',autoRebootActive);
-  addLog('auto-reboot '+(autoRebootActive?'enabled (3 min silence + motor watchdog)':'disabled'),autoRebootActive?'warn':'info');
+// ─────────────────────────────────────────────────────────────────────────────
+//  Card refresh — always shows data (new firmware always publishes all fields)
+// ─────────────────────────────────────────────────────────────────────────────
+function rssiClass(v) { return v==null?'muted':v>=-65?'good':v>=-75?'warn':'bad'; }
+function formatUptime(s) {
+  if(s==null) return '—';
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60);
+  return h>0?`${h}h ${m}m`:`${m}m ${s%60}s`;
 }
-
-function checkSilentUnits() {
-  const now=Date.now();
-  for(let i=1;i<=UNIT_COUNT;i++){
-    if(!units[i].lastSeen) continue;
-    const age=now-units[i].lastSeen;
-    if(age>AUTO_REBOOT_SILENCE){
-      addLog(`unit ${i}: silent ${Math.round(age/60000)} min`+(autoRebootActive?' → rebooting':''),'err');
-      if(autoRebootActive){ sendCmd(i,'reboot'); units[i].lastSeen=now; }
-    }
-  }
-  checkFrozenUnits();
+function isBlackoutToday(list) {
+  if(!list||!list.length) return false;
+  const now=new Date(), t=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0');
+  return list.includes(t);
 }
-
-// Motor-stuck watchdog: unit is publishing but angle hasn't changed for 3+ minutes
-// while it should be running (not paused/detached/cooldown/thermal/master-off).
-const FROZEN_MOTOR_MS=180000; // 3 minutes with no angle change = frozen
-function checkFrozenUnits() {
-  if(!autoRebootActive) return;
-  const now=Date.now();
-  for(let i=1;i<=UNIT_COUNT;i++){
-    const u=units[i];
-    if(!u.lastSeen||!u.lastAngleChange) continue;
-    // Skip if unit is in a legitimately stationary state
-    if(u.paused||u.detached||u.inCooldown||u.thermalSd) continue;
-    if(u.master===false||u.master===0) continue;
-    // If unit is alive (seen within last 30 s) but angle hasn't moved in 3+ min → stuck
-    const seenRecently=(now-u.lastSeen)<30000;
-    const angleFrozen=(now-u.lastAngleChange)>FROZEN_MOTOR_MS;
-    if(seenRecently&&angleFrozen){
-      addLog(`unit ${i}: motor frozen ${Math.round((now-u.lastAngleChange)/60000)} min — sending resume`,'warn');
-      sendCmd(i,'resume');
-      // If it's still frozen 2 minutes from now the next checkFrozenUnits pass will send resume again;
-      // bump lastAngleChange by 1 min so we don't spam every 90 s — true reset happens on angle change
-      u.lastAngleChange=now-(FROZEN_MOTOR_MS-60000);
-    }
-  }
-}
-
-// ── Arc + range bar ───────────────────────────────────────────────────────────
-function updateArc(id,angle) {
-  const ratio=Math.max(0,Math.min(1,angle/180));
-  const arc=document.getElementById(`arc-${id}`), dot=document.getElementById(`dot-${id}`);
-  if (!arc) return;
-  arc.setAttribute('stroke-dashoffset',(100*(1-ratio)).toFixed(1));
-  arc.style.opacity='1';
-  const a=Math.PI*(1-ratio);
-  dot.setAttribute('cx',(34+28*Math.cos(a)).toFixed(1));
-  dot.setAttribute('cy',(38-28*Math.sin(a)).toFixed(1));
-  dot.setAttribute('opacity','1');
-}
-
-function updateRangeBar(id,angle,minL,maxL) {
-  if (minL==null||maxL==null||minL>=maxL) return;
-  document.getElementById(`rfill-${id}`).style.left  = ((minL/180)*100).toFixed(1)+'%';
-  document.getElementById(`rfill-${id}`).style.width = (((maxL-minL)/180)*100).toFixed(1)+'%';
-  document.getElementById(`minval-${id}`).textContent=Math.round(minL);
-  document.getElementById(`maxval-${id}`).textContent=Math.round(maxL);
-  if (angle!=null) { document.getElementById(`rthumb-${id}`).style.left=((angle/180)*100).toFixed(1)+'%'; document.getElementById(`rthumb-${id}`).style.opacity='1'; }
-}
-
-// ── Card refresh ──────────────────────────────────────────────────────────────
-function formatUptime(s) { if(s==null)return'—'; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m ${s%60}s`; }
-function rssiClass(v)    { if(v==null)return'muted'; return v>=-65?'good':v>=-75?'warn':'bad'; }
-function isBlackoutToday(list) { if(!list||!list.length)return false; const now=new Date(), t=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0'); return list.includes(t); }
-
 function formatLastSeen(ts) {
-  if (!ts) return 'never seen';
-  const age = Date.now() - ts;
-  const s = Math.floor(age/1000), m = Math.floor(s/60), h = Math.floor(m/60), d = Math.floor(h/24);
-  if (d > 0)  return `last seen ${d}d ${h%24}h ago`;
-  if (h > 0)  return `last seen ${h}h ${m%60}m ago`;
-  if (m > 0)  return `last seen ${m}m ${s%60}s ago`;
+  if(!ts) return 'never seen';
+  const s=Math.floor((Date.now()-ts)/1000), m=Math.floor(s/60), h=Math.floor(m/60), d=Math.floor(h/24);
+  if(d>0) return `last seen ${d}d ${h%24}h ago`;
+  if(h>0) return `last seen ${h}h ${m%60}m ago`;
+  if(m>0) return `last seen ${m}m ${s%60}s ago`;
   return `last seen ${s}s ago`;
 }
 
-function saveLastSeen(id, ts, temp, heap) {
+// Persist last-seen + sensor values across page reloads
+function saveLastSeen(id,ts,temp,heap) {
   try {
-    localStorage.setItem(`unit${id}_lastSeen`, ts);
-    if (temp != null) localStorage.setItem(`unit${id}_lastTemp`, temp);
-    if (heap != null) localStorage.setItem(`unit${id}_lastHeap`, heap);
-  } catch(e) {}
+    localStorage.setItem(`u${id}_ts`,ts);
+    if(temp!=null) localStorage.setItem(`u${id}_temp`,temp);
+    if(heap!=null) localStorage.setItem(`u${id}_heap`,heap);
+  } catch(e){}
 }
-
 function loadLastSeen(id) {
   try {
-    return {
-      ts:   parseInt(localStorage.getItem(`unit${id}_lastSeen`)) || null,
-      temp: parseFloat(localStorage.getItem(`unit${id}_lastTemp`)) || null,
-      heap: parseInt(localStorage.getItem(`unit${id}_lastHeap`)) || null
-    };
-  } catch(e) { return {ts:null, temp:null, heap:null}; }
+    return { ts:parseInt(localStorage.getItem(`u${id}_ts`))||null,
+             temp:parseFloat(localStorage.getItem(`u${id}_temp`))||null,
+             heap:parseInt(localStorage.getItem(`u${id}_heap`))||null };
+  } catch(e) { return {ts:null,temp:null,heap:null}; }
 }
 
-function updateLastSeenDisplay(id) {
+function refreshCard(id) {
   const u = units[id];
   const saved = loadLastSeen(id);
   const ts = u.lastSeen || saved.ts;
   document.getElementById(`lastseen-${id}`).textContent = formatLastSeen(ts);
-  if (!u.monitoring) {
-    const temp = saved.temp;
-    const heap = saved.heap;
-    if (temp != null) {
-      const valEl = document.getElementById(`temp-val-${id}`);
-      valEl.textContent = temp.toFixed(1) + ' °C (last known)';
-      valEl.className   = 'sensor-value muted';
-    }
-    if (heap != null) {
-      const valEl = document.getElementById(`heap-val-${id}`);
-      valEl.textContent = (heap/1024).toFixed(0) + ' KB (last known)';
-      valEl.className   = 'sensor-value muted';
-    }
-  }
-}
 
-function refreshCard(id) {
-  const u=units[id];
-
-  updateLastSeenDisplay(id);
-
-  // FIX: Always update thermal state on card border and badge, even outside monitoring.
-  // Heartbeats now fire immediately on thermal events, so this ensures the card reflects
-  // thermal shutdown the moment it happens without requiring active monitoring.
+  // Thermal state always visible regardless of publish rate
   const cardEl = document.getElementById(`card-${id}`);
-  if (cardEl) {
-    if (u.thermalSd) cardEl.classList.add('thermal-shutdown');
-    else             cardEl.classList.remove('thermal-shutdown');
+  if(u.thermalSd) cardEl.classList.add('thermal-shutdown');
+  else            cardEl.classList.remove('thermal-shutdown');
+
+  if(!u.lastSeen) {
+    // No data received yet — show stale sensor values from localStorage if any
+    if(saved.temp!=null) {
+      document.getElementById(`temp-val-${id}`).textContent = saved.temp.toFixed(1)+' °C (last known)';
+      document.getElementById(`temp-val-${id}`).className = 'sensor-value muted';
+    }
+    if(saved.heap!=null) {
+      document.getElementById(`heap-val-${id}`).textContent = (saved.heap/1024).toFixed(0)+' KB (last known)';
+      document.getElementById(`heap-val-${id}`).className = 'sensor-value muted';
+    }
+    return;
   }
-  const thermalBadgeEl = document.getElementById(`badge-thermal-${id}`);
-  if (thermalBadgeEl && !u.monitoring) {
-    thermalBadgeEl.style.display = u.thermalSd ? 'inline-block' : 'none';
+
+  const age = Date.now()-u.lastSeen;
+  const sc  = age<10000?'online':age<60000?'stale':'offline';
+  const isFast      = u.monitoring; // monitoring field = fast publish mode
+  const isThermal   = u.thermalSd===true;
+  const isMasterOff = u.master===false;
+  const todayBlkout = isBlackoutToday(u.blackouts);
+
+  let cls = 'unit-card '+sc;
+  if(isFast)    cls += ' fast-publish';
+  if(isThermal) cls += ' thermal-shutdown';
+  cardEl.className = cls;
+
+  // Status pill
+  const pill = document.getElementById(`pill-${id}`);
+  pill.className = 'pill '+(sc==='online'?'online':sc==='stale'?'stale':'offline');
+  pill.textContent = sc==='online'?'Live':sc==='stale'?'Stale':'Offline';
+
+  // NTP badge
+  const ntpBadge = document.getElementById(`ntp-badge-${id}`);
+  if(u.ntpSynced===true)  { ntpBadge.className='badge ntp-ok';   ntpBadge.textContent='ntp ok'; }
+  if(u.ntpSynced===false) { ntpBadge.className='badge ntp-fail'; ntpBadge.textContent='ntp fail'; }
+
+  // Badges
+  document.getElementById(`badge-paused-${id}`).style.display   = (u.paused&&!u.detached&&!isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-detached-${id}`).style.display = (u.detached&&!todayBlkout&&!isMasterOff&&!isThermal&&!u.inCooldown)?'inline-block':'none';
+  document.getElementById(`badge-blackout-${id}`).style.display = (todayBlkout&&!isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-master-${id}`).style.display   = (isMasterOff&&!isThermal)?'inline-block':'none';
+  document.getElementById(`badge-thermal-${id}`).style.display  = isThermal?'inline-block':'none';
+  document.getElementById(`badge-cooldown-${id}`).style.display = (u.inCooldown&&!isThermal)?'inline-block':'none';
+
+  // Publish rate label
+  const prEl = document.getElementById(`pub-rate-${id}`);
+  if(u.pubInterval!=null) {
+    prEl.textContent = `${u.pubInterval}s publish`;
+    prEl.className   = 'pub-rate'+(u.pubInterval<=5?' fast':'');
   }
 
-  if (!u.monitoring) return;
+  // Angle + arc
+  const angleEl = document.getElementById(`angle-${id}`);
+  angleEl.textContent = u.angle!=null ? Math.round(u.angle) : '—';
+  angleEl.style.opacity = '1';
+  if(u.angle!=null) { updateArc(id,u.angle); updateRangeBar(id,u.angle,u.minLimit,u.maxLimit); }
 
-  const age=u.lastSeen?Date.now()-u.lastSeen:Infinity;
-  const sc=age<10000?'online':age<30000?'stale':'offline';
-  const isThermal=u.thermalSd===true;
+  // State text
+  let st = 'running';
+  if(isThermal)       st = 'thermal shutdown';
+  else if(u.inCooldown) st = 'cooling down';
+  else if(isMasterOff)  st = 'master off';
+  else if(todayBlkout)  st = 'blackout day';
+  else if(u.detached)   st = 'detached';
+  else if(u.paused)     st = 'paused';
+  document.getElementById(`state-${id}`).textContent = st;
 
-  let cardClass='unit-card monitoring-active '+sc;
-  if (isThermal) cardClass+=' thermal-shutdown';
-  cardEl.className=cardClass;
+  // Metrics
+  const up = document.getElementById(`uptime-${id}`);
+  up.textContent = formatUptime(u.uptime); up.className='metric-val '+(u.uptime!=null?'good':'muted');
+  const rs = document.getElementById(`rssi-${id}`);
+  rs.textContent = u.rssi!=null?`${u.rssi} dBm`:'—'; rs.className='metric-val '+rssiClass(u.rssi);
+  const bt = document.getElementById(`boardtime-${id}`);
+  bt.textContent = u.boardTime||'—'; bt.className='metric-val '+(u.boardTime?'good':'muted');
 
-  const pill=document.getElementById(`pill-${id}`);
-  pill.className='pill live'; pill.textContent='Live';
+  document.getElementById(`boardsched-on-${id}`).textContent  = u.schedOn||'—';
+  document.getElementById(`boardsched-off-${id}`).textContent = u.schedOff||'—';
+  document.getElementById(`boardblackouts-${id}`).textContent = (u.blackouts&&u.blackouts.length)?u.blackouts.join(', '):'none';
 
-  const todayBlackout=isBlackoutToday(u.blackouts), isMasterOff=u.master===false;
-
-  document.getElementById(`badge-paused-${id}`).style.display    = (u.paused&&!u.detached&&!isMasterOff&&!isThermal)?'inline-block':'none';
-  document.getElementById(`badge-detached-${id}`).style.display  = (u.detached&&!todayBlackout&&!isMasterOff&&!isThermal&&!u.inCooldown)?'inline-block':'none';
-  document.getElementById(`badge-blackout-${id}`).style.display  = (todayBlackout&&!isMasterOff&&!isThermal)?'inline-block':'none';
-  document.getElementById(`badge-master-${id}`).style.display    = (isMasterOff&&!isThermal)?'inline-block':'none';
-  document.getElementById(`badge-thermal-${id}`).style.display   = isThermal?'inline-block':'none';
-  document.getElementById(`badge-cooldown-${id}`).style.display  = (u.inCooldown&&!isThermal)?'inline-block':'none';
-
-  const ntpBadge=document.getElementById(`ntp-badge-${id}`);
-  if      (u.ntpSynced===true)  { ntpBadge.className='badge ntp-ok';   ntpBadge.textContent='ntp ok'; }
-  else if (u.ntpSynced===false) { ntpBadge.className='badge ntp-fail'; ntpBadge.textContent='ntp fail'; }
-
-  const angleEl=document.getElementById(`angle-${id}`);
-  angleEl.textContent=u.angle!=null?Math.round(u.angle):'—';
-  angleEl.style.opacity='1';
-
-  let stateText='live';
-  if (isThermal)         stateText='thermal shutdown';
-  else if (u.inCooldown) stateText='cooling down';
-  else if (isMasterOff)  stateText='master off';
-  else if (todayBlackout)stateText='blackout day';
-  else if (u.detached)   stateText='detached';
-  else if (u.paused)     stateText='paused';
-  else if (u.angle!=null)stateText='running';
-  document.getElementById(`state-${id}`).textContent=stateText;
-
-  const up=document.getElementById(`uptime-${id}`); up.textContent=formatUptime(u.uptime); up.className='metric-val '+(u.uptime!=null?'good':'muted');
-  const rs=document.getElementById(`rssi-${id}`);   rs.textContent=u.rssi!=null?`${u.rssi} dBm`:'—'; rs.className='metric-val '+rssiClass(u.rssi);
-  const bt=document.getElementById(`boardtime-${id}`); bt.textContent=u.boardTime||'—'; bt.className='metric-val '+(u.boardTime?'good':'muted');
-
-  document.getElementById(`boardsched-on-${id}`).textContent  = u.schedOn  || '—';
-  document.getElementById(`boardsched-off-${id}`).textContent = u.schedOff || '—';
-  document.getElementById(`boardblackouts-${id}`).textContent = (u.blackouts&&u.blackouts.length>0)?u.blackouts.join(', '):'none';
-
-  if (u.mSpeed!=null) {
-    document.getElementById(`mspeed-${id}`).textContent=u.mSpeed+'ms'; document.getElementById(`mspeed-${id}`).className='metric-val good';
-    document.getElementById(`mhesit-${id}`).textContent=u.mHesit;      document.getElementById(`mhesit-${id}`).className='metric-val good';
-    document.getElementById(`mpause-${id}`).textContent=u.mPause+'s';  document.getElementById(`mpause-${id}`).className='metric-val good';
+  // Motion params
+  if(u.mSpeed!=null) {
+    document.getElementById(`mspeed-${id}`).textContent=u.mSpeed+'ms';  document.getElementById(`mspeed-${id}`).className='metric-val good';
+    document.getElementById(`mhesit-${id}`).textContent=u.mHesit;       document.getElementById(`mhesit-${id}`).className='metric-val good';
+    document.getElementById(`mpause-${id}`).textContent=u.mPause+'s';   document.getElementById(`mpause-${id}`).className='metric-val good';
     document.getElementById(`mstep-${id}`).textContent=(u.mStep/10).toFixed(1)+'°'; document.getElementById(`mstep-${id}`).className='metric-val good';
-    if (id===controlUnit) updateBoardValues(id);
+    if(id===controlUnit) syncControlSliders(id);
   }
-  if (u.cdActive!=null) {
+  if(u.cdActive!=null) {
     document.getElementById(`cdactive-${id}`).textContent=u.cdActive+'m'; document.getElementById(`cdactive-${id}`).className='metric-val good';
     document.getElementById(`cdrest-${id}`).textContent=u.cdRest+'m';     document.getElementById(`cdrest-${id}`).className='metric-val good';
   }
 
+  // Sensor bars
   updateTempBar(id, u.cpuTemp, u.tCutoff, u.tResume);
   updateHeapBar(id, u.freeHeap);
 
-  if (u.angle!=null) updateArc(id,u.angle);
-  updateRangeBar(id,u.angle,u.minLimit,u.maxLimit);
+  // Master sync
+  if(u.master!=null&&masterState===null){ masterState=u.master; updateMasterUI(); }
 
-  if (u.master!=null&&masterState===null) { masterState=u.master; updateMasterUI(); }
-
-  if (isThermal && !units[id]._thermalLogged) { units[id]._thermalLogged=true; addLog(`unit ${id}: thermal shutdown triggered`,'err'); }
-  if (!isThermal && units[id]._thermalLogged) { units[id]._thermalLogged=false; addLog(`unit ${id}: thermal protection cleared`,'ok'); }
+  // Thermal event logging
+  if(isThermal&&!u._thermalLogged){ u._thermalLogged=true; addLog(`unit ${id}: thermal shutdown`,'err'); }
+  if(!isThermal&&u._thermalLogged){ u._thermalLogged=false; addLog(`unit ${id}: thermal cleared`,'ok'); }
 }
 
-// ── Commands ──────────────────────────────────────────────────────────────────
-function sendCmd(unitId,cmd) {
-  if (!client||!client.connected) { addLog('not connected','err'); return; }
-  client.publish(`museum/unit${unitId}/cmd`,cmd);
-  const silent=['monitor_on','monitor_off','set_speed','set_hesitation','set_pause','set_step','save_motion','set_temp_cutoff','set_temp_resume','save_thermal'];
-  if (!silent.some(s=>cmd.startsWith(s))) addLog(`→ unit ${unitId}: ${cmd}`,'warn');
-  if (cmd==='detach'){units[unitId].detached=true; units[unitId].paused=true;}
-  if (cmd==='attach'){units[unitId].detached=false;units[unitId].paused=false;}
-  if (cmd==='pause') units[unitId].paused=true;
-  if (cmd==='resume')units[unitId].paused=false;
+// ─────────────────────────────────────────────────────────────────────────────
+//  Arc + range bar
+// ─────────────────────────────────────────────────────────────────────────────
+function updateArc(id, angle) {
+  const ratio = Math.max(0,Math.min(1,angle/180));
+  const arc = document.getElementById(`arc-${id}`), dot = document.getElementById(`dot-${id}`);
+  if(!arc) return;
+  arc.setAttribute('stroke-dashoffset',(100*(1-ratio)).toFixed(1));
+  arc.style.opacity='1';
+  const a = Math.PI*(1-ratio);
+  dot.setAttribute('cx',(34+28*Math.cos(a)).toFixed(1));
+  dot.setAttribute('cy',(38-28*Math.sin(a)).toFixed(1));
+  dot.setAttribute('opacity','1');
+}
+function updateRangeBar(id, angle, minL, maxL) {
+  if(minL==null||maxL==null||minL>=maxL) return;
+  document.getElementById(`rfill-${id}`).style.left  = ((minL/180)*100).toFixed(1)+'%';
+  document.getElementById(`rfill-${id}`).style.width = (((maxL-minL)/180)*100).toFixed(1)+'%';
+  document.getElementById(`minval-${id}`).textContent = Math.round(minL);
+  document.getElementById(`maxval-${id}`).textContent = Math.round(maxL);
+  if(angle!=null) {
+    document.getElementById(`rthumb-${id}`).style.left    = ((angle/180)*100).toFixed(1)+'%';
+    document.getElementById(`rthumb-${id}`).style.opacity = '1';
+  }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Sensor bars
+// ─────────────────────────────────────────────────────────────────────────────
+function updateTempBar(id, temp, cutoff, resume) {
+  const fillEl=document.getElementById(`temp-fill-${id}`);
+  const valEl =document.getElementById(`temp-val-${id}`);
+  const thrEl =document.getElementById(`temp-thresholds-${id}`);
+  if(cutoff!=null&&resume!=null) thrEl.textContent=`resume ${resume}° / shutdown ${cutoff}°`;
+  if(temp==null){ fillEl.style.width='0%'; valEl.textContent='— °C'; valEl.className='sensor-value muted'; return; }
+  const max=cutoff?cutoff+10:70;
+  fillEl.style.width=Math.min(100,(temp/max)*100).toFixed(1)+'%';
+  let cls,color;
+  if     (temp<(resume||42)){ cls='good'; color='#4ade80'; }
+  else if(temp<(cutoff||50)){ cls='warn'; color='#fbbf24'; }
+  else                       { cls='bad';  color='#f87171'; }
+  fillEl.style.background=color;
+  valEl.className='sensor-value '+cls;
+  valEl.textContent=temp.toFixed(1)+' °C';
+}
+function updateHeapBar(id, heap) {
+  const fillEl=document.getElementById(`heap-fill-${id}`);
+  const valEl =document.getElementById(`heap-val-${id}`);
+  if(heap==null){ fillEl.style.width='0%'; valEl.textContent='— KB'; valEl.className='sensor-value muted'; return; }
+  fillEl.style.width=Math.min(100,(heap/HEAP_MAX)*100).toFixed(1)+'%';
+  const cls  =heap>HEAP_WARN?'good':heap>HEAP_BAD?'warn':'bad';
+  const color=heap>HEAP_WARN?'#4ade80':heap>HEAP_BAD?'#fbbf24':'#f87171';
+  fillEl.style.background=color; valEl.className='sensor-value '+cls;
+  valEl.textContent=(heap/1024).toFixed(0)+' KB';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Monitor toggle — sends rate command, optional 2-min auto-return
+// ─────────────────────────────────────────────────────────────────────────────
+function toggleMonitor(id) {
+  if(units[id].monitoring) {
+    sendCmd(id,'monitor_off');
+    stopMonitorUI(id);
+  } else {
+    sendCmd(id,'monitor_on');
+    startMonitorUI(id);
+  }
+}
+function startMonitorUI(id) {
+  units[id].monitoring = true;
+  document.getElementById(`mon-btn-${id}`).textContent = 'Monitoring';
+  document.getElementById(`mon-btn-${id}`).classList.add('active');
+  // Auto-return to slow rate after MONITOR_MS (mirrors old firmware timeout)
+  if(monitorCountdowns[id]) clearTimeout(monitorCountdowns[id]);
+  monitorCountdowns[id] = setTimeout(()=>{ sendCmd(id,'monitor_off'); stopMonitorUI(id); }, MONITOR_MS);
+}
+function stopMonitorUI(id) {
+  units[id].monitoring = false;
+  document.getElementById(`mon-btn-${id}`).textContent = 'Monitor';
+  document.getElementById(`mon-btn-${id}`).classList.remove('active');
+  document.getElementById(`card-${id}`).classList.remove('fast-publish');
+  if(monitorCountdowns[id]){ clearTimeout(monitorCountdowns[id]); delete monitorCountdowns[id]; }
+  document.getElementById(`pub-rate-${id}`).textContent = '';
+}
+
+function monitorAll() { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_on'); startMonitorUI(i);} addLog('fast rate → all units','ok'); }
+function slowAll()    { for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,'monitor_off'); stopMonitorUI(i);} addLog('slow rate → all units','warn'); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MQTT connection
+// ─────────────────────────────────────────────────────────────────────────────
+function setConnStatus(state, label) {
+  document.getElementById('conn-dot').className = 'conn-dot '+state;
+  const lbl = document.getElementById('conn-label');
+  lbl.textContent = label;
+  lbl.style.color = state==='connected'?'var(--green)':state==='error'?'var(--red)':state==='connecting'?'var(--amber)':'var(--dimmed)';
+}
+function toggleConnect() {
+  if(client&&client.connected){ client.end(); setConnStatus('','disconnected'); addLog('disconnected','warn'); return; }
+  doConnect();
+}
+function doConnect() {
+  const url=document.getElementById('inp-url').value.trim();
+  const user=document.getElementById('inp-user').value.trim();
+  const pass=document.getElementById('inp-pass').value.trim();
+  if(!url){ addLog('enter broker URL first','err'); return; }
+  setConnStatus('connecting','connecting…'); addLog('connecting…','info');
+  try { client=mqtt.connect(url,{username:user||undefined,password:pass||undefined,reconnectPeriod:5000,connectTimeout:10000}); }
+  catch(e){ setConnStatus('error','error'); addLog('failed: '+e.message,'err'); return; }
+
+  client.on('connect',()=>{
+    setConnStatus('connected','connected'); addLog('broker connected','ok');
+    client.subscribe('museum/#', err=>{ if(!err) addLog('subscribed to museum/#','ok'); });
+    if(schedActive){ lastSchedState=null; checkSchedule(); }
+    if(!healthTimer) startHealthMonitoring();
+  });
+
+  client.on('message',(topic, payload)=>{
+    try {
+      const d = JSON.parse(payload.toString());
+      const id = parseInt(d.unit);
+      if(!id||id<1||id>UNIT_COUNT) return;
+
+      // All fields always present in v3 firmware — update unconditionally
+      units[id].uptime     = d.uptime_s;
+      units[id].paused     = d.paused;
+      units[id].detached   = d.detached;
+      units[id].rssi       = d.wifi_rssi;
+      units[id].ntpSynced  = d.ntp_synced;
+      units[id].master     = d.master     != null ? d.master    : units[id].master;
+      units[id].cpuTemp    = d.cpu_temp   != null ? d.cpu_temp  : units[id].cpuTemp;
+      units[id].thermalSd  = d.thermal_sd  === true;
+      units[id].inCooldown = d.in_cooldown === true;
+      units[id].monitoring = d.monitoring  === true; // true = fast publish mode
+
+      // These are always present in v3 but guard for backward compat with old units
+      if('servo_angle' in d){ units[id].angle    = d.servo_angle; units[id].minLimit = d.min_limit; units[id].maxLimit = d.max_limit; }
+      if('free_heap'   in d) units[id].freeHeap  = d.free_heap;
+      if('board_time'  in d) units[id].boardTime = d.board_time||null;
+      if('sched_on'    in d) units[id].schedOn   = d.sched_on||null;
+      if('sched_off'   in d) units[id].schedOff  = d.sched_off||null;
+      if('blackouts'   in d) units[id].blackouts = d.blackouts?d.blackouts.split(',').filter(x=>x):[];
+      if('m_speed'     in d){ units[id].mSpeed=d.m_speed; units[id].mHesit=d.m_hesit; units[id].mPause=d.m_pause; units[id].mStep=d.m_step; }
+      if('cd_active'   in d){ units[id].cdActive=d.cd_active; units[id].cdRest=d.cd_rest; }
+      if('t_cutoff'    in d){ units[id].tCutoff=d.t_cutoff; units[id].tResume=d.t_resume; }
+      if('pub_interval'in d)  units[id].pubInterval = d.pub_interval;
+
+      // Update last seen + persist
+      units[id].lastSeen = Date.now();
+      saveLastSeen(id, units[id].lastSeen, units[id].cpuTemp, units[id].freeHeap);
+      scheduleWatchdog(id);
+
+      // Health sample
+      if(d.cpu_temp!=null) recordHealthSample(id, d.cpu_temp);
+
+      // Sync master state
+      if(d.master!=null&&masterState===null){ masterState=d.master; updateMasterUI(); }
+
+      // Sync control panel sliders if this is the active unit
+      if(id===controlUnit&&units[id].mSpeed!=null)   syncControlSliders(id);
+
+      refreshCard(id);
+    } catch(e){}
+  });
+
+  client.on('error',    e=>{ setConnStatus('error','error'); addLog('error: '+e.message,'err'); });
+  client.on('offline',  ()=>{ setConnStatus('','offline'); addLog('broker offline','warn'); });
+  client.on('reconnect',()=>{ setConnStatus('connecting','reconnecting…'); addLog('reconnecting…','warn'); });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Commands
+// ─────────────────────────────────────────────────────────────────────────────
+function sendCmd(unitId, cmd) {
+  if(!client||!client.connected){ addLog('not connected','err'); return; }
+  client.publish(`museum/unit${unitId}/cmd`, cmd);
+  const silent=['monitor_on','monitor_off','set_speed','set_hesitation','set_pause','set_step',
+                'save_motion','set_temp_cutoff','set_temp_resume','save_thermal','set_cd'];
+  if(!silent.some(s=>cmd.startsWith(s))) addLog(`→ unit ${unitId}: ${cmd}`,'warn');
+  // Optimistic UI
+  if(cmd==='detach'){ units[unitId].detached=true; units[unitId].paused=true; }
+  if(cmd==='attach'){ units[unitId].detached=false; units[unitId].paused=false; }
+  if(cmd==='pause')  units[unitId].paused=true;
+  if(cmd==='resume') units[unitId].paused=false;
+}
+function sendCmdAll(cmd){ for(let i=1;i<=UNIT_COUNT;i++) sendCmd(i,cmd); }
 function sendLimits(unitId) {
   const minEl=document.getElementById(`set-min-${unitId}`), maxEl=document.getElementById(`set-max-${unitId}`);
   const minV=parseInt(minEl.value), maxV=parseInt(maxEl.value);
-  if (!isNaN(minV)&&minV>=0&&minV<=180){sendCmd(unitId,`set_min:${minV}`);units[unitId].minLimit=minV;minEl.value='';}
-  if (!isNaN(maxV)&&maxV>=0&&maxV<=180){sendCmd(unitId,`set_max:${maxV}`);units[unitId].maxLimit=maxV;maxEl.value='';}
+  if(!isNaN(minV)&&minV>=0&&minV<=180){ sendCmd(unitId,`set_min:${minV}`); units[unitId].minLimit=minV; minEl.value=''; }
+  if(!isNaN(maxV)&&maxV>=0&&maxV<=180){ sendCmd(unitId,`set_max:${maxV}`); units[unitId].maxLimit=maxV; maxEl.value=''; }
+}
+function rebootUnit(id){ if(!confirm(`Reboot unit ${id}?`)) return; sendCmd(id,'reboot'); addLog(`reboot → unit ${id}`,'warn'); }
+function rebootAll()   { if(!confirm('Reboot all units?'))   return; sendCmdAll('reboot'); addLog('reboot → all','warn'); }
+function resetWifiAll(){ if(!confirm('Reset Wi-Fi all?'))    return; sendCmdAll('reset_wifi'); addLog('reset_wifi → all','err'); }
+function masterOn()    { sendCmdAll('master_on');  masterState=true;  updateMasterUI(); addLog('master ON → all','ok'); }
+function masterOff()   {
+  if(!confirm('Turn off all units?')) return;
+  sendCmdAll('master_off'); masterState=false; updateMasterUI(); addLog('master OFF → all','warn');
+}
+function updateMasterUI() {
+  const on=document.getElementById('master-on-btn'), off=document.getElementById('master-off-btn'), st=document.getElementById('master-status');
+  if(masterState===true)  { on.classList.remove('inactive'); off.classList.remove('active'); st.textContent='installation running'; st.className='master-status on'; }
+  else if(masterState===false){ on.classList.add('inactive'); off.classList.add('active'); st.textContent='installation off'; st.className='master-status off'; }
+  else { on.classList.remove('inactive'); off.classList.remove('active'); st.textContent='—'; st.className='master-status'; }
 }
 
-function sendCmdAll(cmd) { for(let i=1;i<=UNIT_COUNT;i++) sendCmd(i,cmd); }
-function rebootUnit(unitId) { if(!confirm(`Reboot unit ${unitId}?`))return; sendCmd(unitId,'reboot'); addLog(`reboot → unit ${unitId}`,'warn'); }
-function rebootAll()    { if(!confirm('Reboot all units?'))return; for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,'reboot'); addLog('reboot → all units','warn'); }
-function resetWifiAll() { if(!confirm('Reset Wi-Fi on all units?'))return; for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,'reset_wifi'); addLog('reset_wifi → all units','err'); }
+// ─────────────────────────────────────────────────────────────────────────────
+//  Control panel sliders
+// ─────────────────────────────────────────────────────────────────────────────
+function selectUnit(id) {
+  controlUnit=id;
+  document.querySelectorAll('.unit-tab').forEach((t,i)=>t.classList.toggle('active',i+1===id));
+  syncControlSliders(id);
+}
+function sliderInput(name, val) {
+  const map={speed:'ctrl-speed-val',hesit:'ctrl-hesit-val',pause:'ctrl-pause-val',step:'ctrl-step-val',
+             cdact:'ctrl-cdact-val',cdrst:'ctrl-cdrst-val',cutoff:'ctrl-cutoff-val',resume:'ctrl-resume-val'};
+  document.getElementById(map[name]).textContent=val;
+}
+function sliderSend(cmd, val) { sendCmd(controlUnit,`${cmd}:${val}`); }
+function saveMotion()   {
+  sendCmd(controlUnit,'save_motion');
+  const f=document.getElementById('save-motion-flash'); f.textContent='saved'; f.className='save-flash motion';
+  setTimeout(()=>f.textContent='',2500);
+}
+function saveCooldown() {
+  sendCmd(controlUnit,'save_cooldown');
+  const f=document.getElementById('save-cooldown-flash'); f.textContent='saved'; f.className='save-flash motion';
+  setTimeout(()=>f.textContent='',2500);
+}
+function syncControlSliders(id) {
+  const u=units[id];
+  if(u.mSpeed!=null){ document.getElementById('ctrl-speed').value=u.mSpeed; document.getElementById('ctrl-speed-val').textContent=u.mSpeed; document.getElementById('ctrl-speed-board').textContent=' (board)'; }
+  if(u.mHesit!=null){ document.getElementById('ctrl-hesit').value=u.mHesit; document.getElementById('ctrl-hesit-val').textContent=u.mHesit; document.getElementById('ctrl-hesit-board').textContent=' (board)'; }
+  if(u.mPause!=null){ document.getElementById('ctrl-pause').value=u.mPause; document.getElementById('ctrl-pause-val').textContent=u.mPause; document.getElementById('ctrl-pause-board').textContent=' (board)'; }
+  if(u.mStep!=null) { document.getElementById('ctrl-step').value=u.mStep;   document.getElementById('ctrl-step-val').textContent=u.mStep;   document.getElementById('ctrl-step-board').textContent=' (board)'; }
+  if(u.cdActive!=null){ document.getElementById('ctrl-cdact').value=u.cdActive; document.getElementById('ctrl-cdact-val').textContent=u.cdActive; document.getElementById('ctrl-cdact-board').textContent=' (board)'; }
+  if(u.cdRest!=null)  { document.getElementById('ctrl-cdrst').value=u.cdRest;   document.getElementById('ctrl-cdrst-val').textContent=u.cdRest;   document.getElementById('ctrl-cdrst-board').textContent=' (board)'; }
+  if(u.tCutoff!=null){ document.getElementById('cutoff-slider').value=u.tCutoff; document.getElementById('ctrl-cutoff-val').textContent=u.tCutoff; document.getElementById('ctrl-cutoff-board').textContent=' (board)'; }
+  if(u.tResume!=null){ document.getElementById('resume-slider').value=u.tResume; document.getElementById('ctrl-resume-val').textContent=u.tResume; document.getElementById('ctrl-resume-board').textContent=' (board)'; }
+}
 
-// ── Schedule ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  Schedule + blackouts
+// ─────────────────────────────────────────────────────────────────────────────
 function sendScheduleToAll() {
-  const onVal=document.getElementById('new-sched-on').value, offVal=document.getElementById('new-sched-off').value;
-  if (!onVal||!offVal){addLog('enter both on and off times','err');return;}
-  for(let i=1;i<=UNIT_COUNT;i++){sendCmd(i,`set_on:${onVal}`);sendCmd(i,`set_off:${offVal}`);}
+  const on=document.getElementById('new-sched-on').value, off=document.getElementById('new-sched-off').value;
+  if(!on||!off){ addLog('enter both times','err'); return; }
+  for(let i=1;i<=UNIT_COUNT;i++){ sendCmd(i,`set_on:${on}`); sendCmd(i,`set_off:${off}`); }
   const c=document.getElementById('sched-confirm');
-  c.innerHTML=`<span style="color:var(--green)">sent ${onVal} → ${offVal} to all units</span>`;
+  c.innerHTML=`<span style="color:var(--green)">sent ${on} → ${off} to all</span>`;
   setTimeout(()=>c.innerHTML='',4000);
-  addLog(`board schedule: ${onVal} → ${offVal}`,'ok');
+  addLog(`schedule: ${on} → ${off} → all`,'ok');
 }
-
 function renderBlackoutTags() {
   const c=document.getElementById('blackout-tags-display');
-  if(!dashboardBlackouts.size){c.innerHTML='<span class="blackout-tags-empty">no blackout dates set</span>';return;}
-  c.innerHTML=Array.from(dashboardBlackouts).sort().map(d=>`<div class="blackout-tag">${d}<button onclick="removeBlackoutFromAll('${d}')">×</button></div>`).join('');
+  if(!dashboardBlackouts.size){ c.innerHTML='<span class="blackout-tags-empty">no blackout dates set</span>'; return; }
+  c.innerHTML=Array.from(dashboardBlackouts).sort().map(d=>
+    `<div class="blackout-tag">${d}<button onclick="removeBlackoutFromAll('${d}')">×</button></div>`).join('');
 }
-
 function addBlackoutToAll() {
-  const input=document.getElementById('blackout-date');
-  if(!input.value){addLog('select a date first','err');return;}
-  const p=input.value.split('-'), d=`${p[2]}/${p[1]}`;
+  const inp=document.getElementById('blackout-date');
+  if(!inp.value){ addLog('select a date','err'); return; }
+  const p=inp.value.split('-'), d=`${p[2]}/${p[1]}`;
   dashboardBlackouts.add(d); renderBlackoutTags();
-  for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,`add_blackout:${d}`);
+  for(let i=1;i<=UNIT_COUNT;i++) sendCmd(i,`add_blackout:${d}`);
   const c=document.getElementById('blackout-confirm');
   c.innerHTML=`<span style="color:var(--amber)">blackout ${d} sent</span>`;
   setTimeout(()=>c.innerHTML='',4000);
-  addLog(`blackout added: ${d}`,'warn'); input.value='';
+  addLog(`blackout added: ${d}`,'warn'); inp.value='';
 }
-
 function removeBlackoutFromAll(d) {
   dashboardBlackouts.delete(d); renderBlackoutTags();
-  for(let i=1;i<=UNIT_COUNT;i++)sendCmd(i,`remove_blackout:${d}`);
+  for(let i=1;i<=UNIT_COUNT;i++) sendCmd(i,`remove_blackout:${d}`);
   addLog(`blackout removed: ${d}`,'warn');
 }
-
 function toggleSchedule() {
   schedActive=!schedActive;
   const btn=document.getElementById('sched-btn');
   btn.textContent=schedActive?'Disable':'Enable';
   btn.classList.toggle('on',schedActive);
-  if(schedActive){lastSchedState=null;checkSchedule();schedInterval=setInterval(checkSchedule,30000);addLog('override enabled','ok');}
-  else{clearInterval(schedInterval);schedInterval=null;lastSchedState=null;document.getElementById('sched-status').textContent='override off';document.getElementById('sched-status').className='status-text';document.getElementById('sched-next').textContent='';addLog('override disabled','warn');}
+  if(schedActive){ lastSchedState=null; checkSchedule(); schedInterval=setInterval(checkSchedule,30000); addLog('override enabled','ok'); }
+  else { clearInterval(schedInterval); schedInterval=null; lastSchedState=null;
+    document.getElementById('sched-status').textContent='override off';
+    document.getElementById('sched-status').className='status-text';
+    document.getElementById('sched-next').textContent='';
+    addLog('override disabled','warn'); }
 }
-
 function checkSchedule() {
-  if(!schedActive)return;
-  const now=new Date(),cur=now.getHours()*60+now.getMinutes();
-  const on=document.getElementById('sched-on').value.split(':'),off=document.getElementById('sched-off').value.split(':');
-  const onM=parseInt(on[0])*60+parseInt(on[1]),offM=parseInt(off[0])*60+parseInt(off[1]);
+  if(!schedActive) return;
+  const now=new Date(), cur=now.getHours()*60+now.getMinutes();
+  const on=document.getElementById('sched-on').value.split(':'), off=document.getElementById('sched-off').value.split(':');
+  const onM=parseInt(on[0])*60+parseInt(on[1]), offM=parseInt(off[0])*60+parseInt(off[1]);
   const run=cur>=onM&&cur<offM;
-  const s=document.getElementById('sched-status'),n=document.getElementById('sched-next');
-  if(run&&lastSchedState!=='on'){lastSchedState='on';sendCmdAll('attach');setTimeout(()=>sendCmdAll('resume'),1500);s.textContent='override: running';s.className='status-text active';n.textContent=`pauses at ${document.getElementById('sched-off').value}`;addLog('override: attach + resume → all','ok');}
-  else if(!run&&lastSchedState!=='off'){lastSchedState='off';sendCmdAll('detach');s.textContent='override: detached';s.className='status-text';n.textContent=`resumes at ${document.getElementById('sched-on').value}`;addLog('override: detach → all','warn');}
+  const s=document.getElementById('sched-status'), n=document.getElementById('sched-next');
+  if(run&&lastSchedState!=='on'){ lastSchedState='on'; sendCmdAll('attach'); setTimeout(()=>sendCmdAll('resume'),1500); s.textContent='override: running'; s.className='status-text active'; n.textContent=`pauses at ${document.getElementById('sched-off').value}`; addLog('override: attach+resume → all','ok'); }
+  else if(!run&&lastSchedState!=='off'){ lastSchedState='off'; sendCmdAll('detach'); s.textContent='override: detached'; s.className='status-text'; n.textContent=`resumes at ${document.getElementById('sched-on').value}`; addLog('override: detach → all','warn'); }
 }
 
-// ── Broker ────────────────────────────────────────────────────────────────────
-function setConnStatus(state,label) {
-  document.getElementById('conn-dot').className='conn-dot '+state;
-  const lbl=document.getElementById('conn-label');
-  lbl.textContent=label;
-  lbl.style.color=state==='connected'?'var(--green)':state==='error'?'var(--red)':state==='connecting'?'var(--amber)':'var(--dimmed)';
+// ─────────────────────────────────────────────────────────────────────────────
+//  Watchdog — auto-reboot unit if silent 60 s during ON hours
+// ─────────────────────────────────────────────────────────────────────────────
+function scheduleWatchdog(id) {
+  if(watchdogTimers[id]) clearTimeout(watchdogTimers[id]);
+  watchdogTimers[id] = setTimeout(()=>maybeAutoReboot(id), WATCHDOG_MS);
 }
 
-function toggleConnect() {
-  if(client&&client.connected){client.end();setConnStatus('','disconnected');addLog('disconnected','warn');return;}
-  doConnect();
-}
-
-function doConnect() {
-  const url=document.getElementById('inp-url').value.trim(),user=document.getElementById('inp-user').value.trim(),pass=document.getElementById('inp-pass').value.trim();
-  if(!url){addLog('enter broker URL first','err');return;}
-  setConnStatus('connecting','connecting…');addLog('connecting…','info');
-  try{client=mqtt.connect(url,{username:user||undefined,password:pass||undefined,reconnectPeriod:5000,connectTimeout:10000});}
-  catch(e){setConnStatus('error','error');addLog('failed: '+e.message,'err');return;}
-
-  client.on('connect',()=>{
-    setConnStatus('connected','connected');addLog('broker connected','ok');
-    client.subscribe('museum/#',err=>{if(!err)addLog('subscribed to museum/#','ok');});
-    if(schedActive){lastSchedState=null;checkSchedule();}
-    if (!healthTimer) startHealthMonitoring();
-  });
-
-  client.on('message',(topic,payload)=>{
-    try {
-      const d=JSON.parse(payload.toString()),id=parseInt(d.unit);
-      if(!id||id<1||id>UNIT_COUNT)return;
-
-      // FIX: Core fields present in every message (heartbeat + full status) — always update.
-
-      // ── Reboot detection: uptime went backwards (was >60 s, now <30 s) ──────
-      const prevUptime = units[id].uptime;
-      if(prevUptime!=null && prevUptime>60 && d.uptime_s!=null && d.uptime_s<30){
-        addLog(`unit ${id}: reboot detected (uptime ${prevUptime}→${d.uptime_s} s) — auto-attaching in 5 s`,'warn');
-        setTimeout(()=>{ sendCmd(id,'attach');  addLog(`unit ${id}: post-reboot attach sent`,'info'); },5000);
-        setTimeout(()=>{ sendCmd(id,'resume');  addLog(`unit ${id}: post-reboot resume sent`,'info'); },8000);
-      }
-
-      // uptime, rssi, cpu_temp are present in every message (heartbeat + status) — always overwrite.
-      units[id].uptime    = d.uptime_s;
-      units[id].rssi      = d.wifi_rssi;
-      units[id].ntpSynced = d.ntp_synced;
-      units[id].master    = d.master   != null ? d.master   : null;
-      units[id].cpuTemp   = d.cpu_temp != null ? d.cpu_temp : null;
-
-      // paused / detached / thermalSd / inCooldown: OLD firmware heartbeat does NOT include
-      // these fields — they only appear in full publishStatus() messages (monitoring active).
-      // Using unconditional assignment would reset them to undefined/false on every 5-minute
-      // heartbeat, causing the dashboard to think units are always non-detached and
-      // re-enabling monitoring (and high-frequency TLS publishing) even for idle units.
-      // Solution: only overwrite when the field is actually present in this message, so the
-      // last known state is preserved through heartbeat-only windows.
-      if('paused'    in d) units[id].paused    = d.paused    === true;
-      if('detached'  in d){
-        const wasDetached = units[id].detached;
-        units[id].detached = d.detached === true;
-        // FIRMWARE BUG WORKAROUND (sketch_may06a line 816 vs 827):
-        // publishStatus() runs before the isDetached guard, so the unit keeps publishing
-        // every 5 s during any active monitoring window even when physically detached.
-        // Fix: the moment we see detached:true arrive, send monitor_off immediately to
-        // terminate the current window — don't wait for it to expire on its own (up to 2 min).
-        if(!wasDetached && units[id].detached && units[id].monitoring){
-          sendCmd(id,'monitor_off');
-          addLog(`unit ${id}: detached — sent monitor_off to stop 5 s publishing`,'info');
-        }
-      }
-      if('thermal_sd'in d) units[id].thermalSd = d.thermal_sd=== true;
-
-      // ── Cooldown-end detection: inCooldown was true, now false ───────────────
-      // Wrapped in the same guard so it only fires when in_cooldown is actually reported.
-      if('in_cooldown' in d){
-        const nowCooldown = d.in_cooldown === true;
-        if(units[id].inCooldown && !nowCooldown){
-          addLog(`unit ${id}: cooldown ended — auto-resuming in 3 s`,'info');
-          setTimeout(()=>{ sendCmd(id,'attach');  addLog(`unit ${id}: post-cooldown attach sent`,'info'); },3000);
-          setTimeout(()=>{ sendCmd(id,'resume');  addLog(`unit ${id}: post-cooldown resume sent`,'info'); },5000);
-        }
-        units[id].inCooldown = nowCooldown;
-      }
-
-      // FIX: Monitoring-only fields — only update when the key is actually present in the
-      // message. Heartbeats don't carry these fields; without this guard, every heartbeat
-      // would reset mSpeed, tCutoff, schedOn, blackouts etc. to null, wiping the control
-      // panel board values and temperature thresholds at exactly the wrong moment
-      // (e.g. immediately after a thermal shutdown triggers an instant heartbeat).
-      if ('board_time' in d) units[id].boardTime = d.board_time || null;
-      if ('sched_on'   in d) units[id].schedOn   = d.sched_on   || null;
-      if ('sched_off'  in d) units[id].schedOff  = d.sched_off  || null;
-      if ('blackouts'  in d) units[id].blackouts  = d.blackouts ? d.blackouts.split(',').filter(x=>x) : [];
-      if ('free_heap'  in d) units[id].freeHeap   = d.free_heap;
-      if ('m_speed'    in d) units[id].mSpeed     = d.m_speed;
-      if ('m_hesit'    in d) units[id].mHesit     = d.m_hesit;
-      if ('m_pause'    in d) units[id].mPause     = d.m_pause;
-      if ('m_step'     in d) units[id].mStep      = d.m_step;
-      if ('t_cutoff'   in d) units[id].tCutoff    = d.t_cutoff;
-      if ('t_resume'   in d) units[id].tResume    = d.t_resume;
-      if ('cd_active'  in d) units[id].cdActive   = d.cd_active;
-      if ('cd_rest'    in d) units[id].cdRest     = d.cd_rest;
-
-      // Always record temperature for health log
-      if (d.cpu_temp != null) recordHealthSample(id, d.cpu_temp);
-
-      if(d.master!=null&&masterState===null){masterState=d.master;updateMasterUI();}
-      if(id===controlUnit&&('m_speed' in d))syncControlSliders(id);
-      if(id===controlUnit&&('cd_active' in d))syncControlSliders(id);
-
-      // Always update position data when present — works for both status and heartbeat messages
-      if('servo_angle' in d){
-        if(d.servo_angle!==units[id].lastAngle){
-          units[id].lastAngle=d.servo_angle;
-          units[id].lastAngleChange=Date.now();
-        }
-        units[id].angle=d.servo_angle; units[id].minLimit=d.min_limit; units[id].maxLimit=d.max_limit;
-      }
-      units[id].lastSeen=Date.now();
-      saveLastSeen(id, units[id].lastSeen, units[id].cpuTemp, units[id].freeHeap);
-      // NEVER call stopMonitorUI from an incoming message. The old firmware heartbeat always
-      // sends monitoring:false even during an active session — calling stopMonitorUI here clears
-      // the card mid-session. Only the countdown timer is allowed to stop monitoring.
-      if(d.monitoring===true && !units[id].monitoring) startMonitorUI(id);
-      refreshCard(id);
-    }catch(e){}
-  });
-
-  client.on('error',    e=>{setConnStatus('error','error');addLog('error: '+e.message,'err');});
-  client.on('offline',  ()=>{setConnStatus('','offline');addLog('broker offline','warn');});
-  client.on('reconnect',()=>{setConnStatus('connecting','reconnecting…');addLog('reconnecting…','warn');});
-}
-
-// ── Log ───────────────────────────────────────────────────────────────────────
-function addLog(msg,type='info') {
-  const log=document.getElementById('log'),el=document.createElement('div');
-  el.className='log-entry';
-  el.innerHTML=`<span class="log-time">${new Date().toTimeString().slice(0,8)}</span><span class="log-msg ${type}">${msg}</span>`;
-  log.prepend(el);
-  while(log.children.length>60)log.removeChild(log.lastChild);
-}
-
-// ── Health log ────────────────────────────────────────────────────────────────
-const HEALTH_INTERVAL_MS = 5 * 60 * 1000;
-const HEALTH_SAMPLE_WAIT = 4000;
-let healthTimer       = null;
-let healthCheckActive = false;
-let healthLastDate    = null;
-
-function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-function loadHealthLog() {
-  try { return JSON.parse(localStorage.getItem('healthLog') || '{}'); } catch(e) { return {}; }
-}
-
-function saveHealthLog(log) {
-  try { localStorage.setItem('healthLog', JSON.stringify(log)); } catch(e) {}
-}
-
-function recordHealthSample(unitId, temp) {
-  if (temp == null) return;
-  const log    = loadHealthLog();
-  const today  = todayKey();
-  if (!log[today])         log[today] = {};
-  if (!log[today][unitId]) log[today][unitId] = [];
-  log[today][unitId].push({ t: Date.now(), temp });
-  const keys = Object.keys(log).sort();
-  while (keys.length > 2) { delete log[keys.shift()]; keys.shift(); }
-  saveHealthLog(log);
-}
-
-function getHealthStats(readings) {
-  if (!readings || !readings.length) return null;
-  const temps = readings.map(r => r.temp);
-  return { min:Math.min(...temps), max:Math.max(...temps), avg:temps.reduce((a,b)=>a+b,0)/temps.length, count:temps.length, readings };
-}
-
-function tempClass(t) {
-  if (t == null) return 'muted';
-  return t < 50 ? 'good' : t < 60 ? 'warn' : 'bad';
-}
-
-function drawChart(canvasId, readings, cutoff) {
-  const container = document.getElementById(canvasId);
-  if (!container) return;
-  if (!readings || readings.length < 2) { container.innerHTML = '<div class="health-chart-empty">collecting data…</div>'; return; }
-  const w = container.offsetWidth || 300;
-  const h = 60;
-  const temps  = readings.map(r => r.temp);
-  const times  = readings.map(r => r.t);
-  const minT   = Math.min(...temps) - 2;
-  const maxT   = Math.max(Math.max(...temps) + 2, (cutoff || 60));
-  const tRange = maxT - minT;
-  const tMin   = Math.min(...times);
-  const tMax   = Math.max(...times);
-  const tRange2= tMax - tMin || 1;
-  const pts = readings.map(r => {
-    const x = ((r.t - tMin) / tRange2) * w;
-    const y = h - ((r.temp - minT) / tRange) * h;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const cutoffY = cutoff ? (h - ((cutoff - minT) / tRange) * h).toFixed(1) : null;
-  container.innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" class="health-chart-line">
-      ${cutoffY ? `<line x1="0" y1="${cutoffY}" x2="${w}" y2="${cutoffY}" stroke="rgba(248,113,113,0.3)" stroke-width="1" stroke-dasharray="3,3"/>` : ''}
-      <polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
-      <circle cx="${pts[pts.length-1].split(',')[0]}" cy="${pts[pts.length-1].split(',')[1]}" r="2.5" fill="var(--accent)"/>
-    </svg>
-    <div class="health-chart-label">${temps[temps.length-1].toFixed(1)}°C</div>
-  `;
-}
-
-function renderHealthGrid() {
-  const log    = loadHealthLog();
-  const today  = todayKey();
-  const keys   = Object.keys(log).sort();
-  const yesterday = keys.filter(k => k !== today).pop() || null;
-  const grid   = document.getElementById('health-grid');
-  if (!grid) return;
-  let html = '';
-  for (let i = 1; i <= UNIT_COUNT; i++) {
-    const todayStats = getHealthStats(log[today]?.[i]);
-    const yestStats  = getHealthStats(log[yesterday]?.[i]);
-    const cutoff     = units[i].tCutoff || 50;
-    const avg  = todayStats ? todayStats.avg.toFixed(1)  : '—';
-    const min  = todayStats ? todayStats.min.toFixed(1)  : '—';
-    const max  = todayStats ? todayStats.max.toFixed(1)  : '—';
-    const cnt  = todayStats ? todayStats.count           : 0;
-    html += `
-      <div class="health-card">
-        <div class="health-card-header">
-          <div class="health-card-title">Unit 0${i}</div>
-          <div class="health-card-date">${today} · ${cnt} reading${cnt!==1?'s':''}</div>
-        </div>
-        <div class="health-stats">
-          <div class="health-stat"><div class="health-stat-lbl">Avg</div><div class="health-stat-val ${todayStats?tempClass(todayStats.avg):'muted'}">${avg}${todayStats?'°':''}</div></div>
-          <div class="health-stat"><div class="health-stat-lbl">Min</div><div class="health-stat-val ${todayStats?tempClass(todayStats.min):'muted'}">${min}${todayStats?'°':''}</div></div>
-          <div class="health-stat"><div class="health-stat-lbl">Max</div><div class="health-stat-val ${todayStats?tempClass(todayStats.max):'muted'}">${max}${todayStats?'°':''}</div></div>
-        </div>
-        <div class="health-chart" id="hchart-${i}"><div class="health-chart-empty">no data yet</div></div>
-        ${yestStats ? `<div class="health-yesterday"><span>Yesterday:</span> avg ${yestStats.avg.toFixed(1)}° &nbsp; min ${yestStats.min.toFixed(1)}° &nbsp; max ${yestStats.max.toFixed(1)}° &nbsp; (${yestStats.count} readings)</div>` : ''}
-      </div>`;
+function isWithinScheduleHours(id) {
+  const u = units[id];
+  // If we haven't received schedule from firmware yet, assume ON (safe — only fires when silent)
+  if(!u.schedOn || !u.schedOff) return true;
+  let boardMins;
+  if(u.boardTime && u.lastSeen) {
+    // Extrapolate from last known board time + elapsed ms since message
+    const [bh,bm] = u.boardTime.split(':').map(Number);
+    boardMins = (bh*60 + bm + Math.floor((Date.now()-u.lastSeen)/60000)) % 1440;
+  } else {
+    const n = new Date(); boardMins = n.getHours()*60 + n.getMinutes();
   }
-  grid.innerHTML = html;
-  for (let i = 1; i <= UNIT_COUNT; i++) {
-    const stats  = getHealthStats(log[today]?.[i]);
-    const cutoff = units[i].tCutoff || 50;
-    if (stats) drawChart(`hchart-${i}`, stats.readings, cutoff);
-  }
+  const [onH, onM]  = u.schedOn.split(':').map(Number);
+  const [offH,offM] = u.schedOff.split(':').map(Number);
+  return boardMins >= onH*60+onM && boardMins < offH*60+offM;
 }
 
-function runHealthCheck() {
-  if (!client || !client.connected) { addLog('health check: not connected','warn'); scheduleNextHealthCheck(); return; }
-  if (healthCheckActive) return;
-  const anyMonitoring = Object.values(units).some(u => u.monitoring);
-  if (anyMonitoring) { addLog('health check skipped — monitoring active','info'); scheduleNextHealthCheck(); return; }
-  const anyCooldown = Object.values(units).some(u => u.inCooldown);
-  if (anyCooldown) { addLog('health check skipped — unit in cooldown','info'); scheduleNextHealthCheck(); return; }
-
-  healthCheckActive = true;
-  const dot=document.getElementById('health-dot'), status=document.getElementById('health-status');
-  if (dot) dot.className='dot';
-  if (status) status.textContent='checking…';
-
-  for (let i = 1; i <= UNIT_COUNT; i++) {
-    if (client && client.connected) client.publish(`museum/unit${i}/cmd`, 'monitor_on');
-  }
-
-  setTimeout(() => {
-    for (let i = 1; i <= UNIT_COUNT; i++) {
-      if (client && client.connected) client.publish(`museum/unit${i}/cmd`, 'monitor_off');
-      if (units[i].cpuTemp != null) recordHealthSample(i, units[i].cpuTemp);
-    }
-    healthCheckActive = false;
-    if (dot)    { dot.className = 'dot idle'; }
-    if (status) { status.textContent = 'idle'; }
-    renderHealthGrid();
-    scheduleNextHealthCheck();
-  }, HEALTH_SAMPLE_WAIT);
+function maybeAutoReboot(id) {
+  const now = Date.now();
+  const u   = units[id];
+  if(!client||!client.connected)              { return; }
+  if(!u.lastSeen)                              { return; }
+  if(now - u.lastSeen < WATCHDOG_MS)           { return; }  // message arrived in time
+  if(now - lastAutoReboot[id] < REBOOT_GAP_MS) { addLog(`unit ${id} watchdog: silent — reboot gap active, skipping`,'info'); return; }
+  if(u.inCooldown)                             { addLog(`unit ${id} watchdog: silent — in cooldown, skipping`,'info'); return; }
+  if(u.thermalSd)                              { addLog(`unit ${id} watchdog: silent — thermal shutdown, skipping`,'info'); return; }
+  if(!isWithinScheduleHours(id))               { addLog(`unit ${id} watchdog: silent — outside ON hours, skipping`,'info'); return; }
+  addLog(`⚡ unit ${id} watchdog: silent 60 s during ON hours → auto-rebooting`,'warn');
+  sendCmd(id,'reboot');
+  lastAutoReboot[id] = now;
 }
 
-function scheduleNextHealthCheck() {
-  if (healthTimer) clearTimeout(healthTimer);
-  healthTimer = setTimeout(() => { checkAndResetHealthLog(); runHealthCheck(); }, HEALTH_INTERVAL_MS);
-  const next = new Date(Date.now() + HEALTH_INTERVAL_MS);
-  const el   = document.getElementById('health-next');
-  if (el) el.textContent = `next check at ${next.toTimeString().slice(0,5)}`;
+// ─────────────────────────────────────────────────────────────────────────────
+//  Event log
+// ─────────────────────────────────────────────────────────────────────────────
+function addLog(msg, cls='info') {
+  const el=document.getElementById('log-entries');
+  const now=new Date(), t=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  el.insertAdjacentHTML('afterbegin',`<div class="log-entry"><span class="log-time">${t}</span><span class="log-msg ${cls}">${msg}</span></div>`);
+  while(el.children.length>80) el.removeChild(el.lastChild);
 }
 
-function checkAndResetHealthLog() {
-  const today = todayKey();
-  if (healthLastDate && healthLastDate !== today) addLog(`health log: new day started (${today})`, 'info');
-  healthLastDate = today;
-}
-
-function clearHealthLog() {
-  if (!confirm('Clear all health log data?')) return;
-  try { localStorage.removeItem('healthLog'); } catch(e) {}
-  renderHealthGrid();
-  addLog('health log cleared', 'warn');
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+//  Health log
+// ─────────────────────────────────────────────────────────────────────────────
 function startHealthMonitoring() {
-  healthLastDate = todayKey();
-  renderHealthGrid();
-  scheduleNextHealthCheck();
-  addLog('health monitoring started — checks every 5 minutes', 'info');
+  healthTimer=setInterval(()=>{ for(let i=1;i<=UNIT_COUNT;i++) flushHealthSample(i); renderHealthCards(); }, HEALTH_INTERVAL_MS);
+  document.getElementById('health-dot').classList.remove('idle');
+  document.getElementById('health-status').textContent='sampling every 5 min';
+  renderHealthCards();
 }
-
-function tick(){
-  document.getElementById('clock').textContent=new Date().toLocaleString();
-  for (let i = 1; i <= UNIT_COUNT; i++) updateLastSeenDisplay(i);
+function recordHealthSample(id, temp) {
+  // Just keep latest temp for flushing at the interval tick
+  lastHealthSample[id] = temp;
 }
-
-function initLastSeen() {
-  for (let i = 1; i <= UNIT_COUNT; i++) {
-    const saved = loadLastSeen(i);
-    if (saved.ts) { units[i].lastSeen = null; updateLastSeenDisplay(i); }
+function flushHealthSample(id) {
+  if(lastHealthSample[id]===0) return;
+  const samples = healthLog[id];
+  samples.push({ ts: Date.now(), temp: lastHealthSample[id] });
+  if(samples.length > HEALTH_MAX_SAMPLES) samples.splice(0, samples.length - HEALTH_MAX_SAMPLES);
+  // Persist
+  try { localStorage.setItem(`health_${id}`, JSON.stringify(samples.slice(-HEALTH_MAX_SAMPLES))); } catch(e){}
+}
+function loadHealthLog() {
+  for(let i=1;i<=UNIT_COUNT;i++){
+    try {
+      const s=localStorage.getItem(`health_${i}`);
+      if(s) healthLog[i]=JSON.parse(s);
+    } catch(e){}
+  }
+}
+function clearHealthLog() {
+  if(!confirm('Clear all health log data?')) return;
+  for(let i=1;i<=UNIT_COUNT;i++){ healthLog[i]=[]; try{localStorage.removeItem(`health_${i}`);}catch(e){} }
+  renderHealthCards(); addLog('health log cleared','warn');
+}
+function exportHealthLog() {
+  let csv='unit,timestamp,temp_c\n';
+  for(let i=1;i<=UNIT_COUNT;i++) healthLog[i].forEach(s=>{ csv+=`${i},${new Date(s.ts).toISOString()},${s.temp.toFixed(1)}\n`; });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`health-log-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+function renderHealthCards() {
+  for(let id=1;id<=UNIT_COUNT;id++){
+    const samples=healthLog[id];
+    const emptyEl=document.getElementById(`hempty-${id}`);
+    const canvas =document.getElementById(`hcanvas-${id}`);
+    if(!samples.length){ emptyEl.style.display='flex'; canvas.style.display='none';
+      document.getElementById(`hmin-${id}`).textContent='—'; document.getElementById(`hmin-${id}`).className='health-stat-val muted';
+      document.getElementById(`havg-${id}`).textContent='—'; document.getElementById(`havg-${id}`).className='health-stat-val muted';
+      document.getElementById(`hmax-${id}`).textContent='—'; document.getElementById(`hmax-${id}`).className='health-stat-val muted';
+      document.getElementById(`hdate-${id}`).textContent='—';
+      document.getElementById(`hcount-${id}`).textContent=''; continue; }
+    emptyEl.style.display='none'; canvas.style.display='block';
+    const temps=samples.map(s=>s.temp);
+    const mn=Math.min(...temps), mx=Math.max(...temps), av=temps.reduce((a,b)=>a+b,0)/temps.length;
+    const tCut=units[id].tCutoff||50, tWarn=tCut-5;
+    const sc=id=>mx>=tCut?'bad':mx>=tWarn?'warn':'good';
+    document.getElementById(`hmin-${id}`).textContent=mn.toFixed(1)+'°'; document.getElementById(`hmin-${id}`).className='health-stat-val good';
+    document.getElementById(`havg-${id}`).textContent=av.toFixed(1)+'°'; document.getElementById(`havg-${id}`).className='health-stat-val '+(av>=tCut?'bad':av>=tWarn?'warn':'good');
+    document.getElementById(`hmax-${id}`).textContent=mx.toFixed(1)+'°'; document.getElementById(`hmax-${id}`).className='health-stat-val '+(mx>=tCut?'bad':mx>=tWarn?'warn':'good');
+    document.getElementById(`hdate-${id}`).textContent=new Date(samples[0].ts).toLocaleDateString();
+    document.getElementById(`hcount-${id}`).textContent=`${samples.length} samples`;
+    // Draw sparkline
+    const W=canvas.offsetWidth||260, H=55;
+    canvas.width=W; canvas.height=H;
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    const pad=4, tMin=Math.min(mn-2,30), tMax=Math.max(mx+2,tCut+5);
+    const scaleY=t=>(H-pad)-((t-tMin)/(tMax-tMin))*(H-pad*2);
+    // Warning band
+    ctx.fillStyle='rgba(248,113,113,0.08)';
+    ctx.fillRect(0,scaleY(tCut),W,H-scaleY(tCut));
+    ctx.fillStyle='rgba(251,191,36,0.06)';
+    ctx.fillRect(0,scaleY(tWarn),W,scaleY(tCut)-scaleY(tWarn));
+    // Line
+    ctx.beginPath(); ctx.strokeStyle='#c8b8f8'; ctx.lineWidth=1.5; ctx.lineJoin='round';
+    samples.forEach((s,i)=>{
+      const x=(i/(samples.length-1||1))*W, y=scaleY(s.temp);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
   }
 }
 
-buildCards(); updateMasterUI(); initLastSeen(); renderHealthGrid(); setInterval(tick,1000); tick();
+// ─────────────────────────────────────────────────────────────────────────────
+//  Clock + last-seen refresh
+// ─────────────────────────────────────────────────────────────────────────────
+function updateLastSeenDisplays() {
+  for(let i=1;i<=UNIT_COUNT;i++){
+    const saved=loadLastSeen(i);
+    const ts=units[i].lastSeen||saved.ts;
+    const el=document.getElementById(`lastseen-${i}`);
+    if(el) el.textContent=formatLastSeen(ts);
+    // Refresh card connection class if stale threshold crossed
+    if(units[i].lastSeen) refreshCard(i);
+  }
+}
+setInterval(updateLastSeenDisplays,5000);
+setInterval(()=>{
+  const n=new Date();
+  document.getElementById('clock').textContent=
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+},1000);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Boot
+// ─────────────────────────────────────────────────────────────────────────────
+loadHealthLog();
+buildAll();
 </script>
 </body>
 </html>
